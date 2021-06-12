@@ -1,7 +1,7 @@
 {
-  "name": "signalk-hour-meter",
+  "name": "signalk-pump-meter",
   "version": "1.0.0",
-  "description": "Synthesizes hour meter data when other SignalK values indicate a device is on",
+  "description": "Synthesizes pump meter runtime and cycle count when other SignalK values indicate the pump is running",
   "main": "index.js",
   "dependencies": {
     "baconjs": "^1.0.1",
@@ -11,7 +11,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/joelkoz/signalk-hour-meter"
+    "url": "https://github.com/bobhy/signalk-pump-meter"
   },
   "keywords": [
     "signalk-node-server-plugin",
@@ -45,6 +45,6 @@
     "build": "NODE_ENV=production webpack --config webpack.prod.js",
     "dev": "NODE_ENV=development webpack --config webpack.dev.js"
   },
-  "author": "Joel Kozikowski",
+  "author": "Bob Hyman",
   "license": "ISC"
 }

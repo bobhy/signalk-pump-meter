@@ -1,3 +1,4 @@
+//fixme revisit to generate a good test history
 const Plugin = require('./index.js');
 const MockApp = require('./mocks.js').MockApp;
 

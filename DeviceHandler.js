@@ -15,7 +15,7 @@ class DeviceHandler {
         this.readTotalTime();
 
         this.reportSK();
-    }    
+    }
 
     readTotalTime() {
         let status = `Reading run history for ${this.config.name}`;
@@ -32,6 +32,7 @@ class DeviceHandler {
             if (this.deviceOn) {
                 this.lastRecordedTime = rec.endTime;
             }
+            this.cycleCount = rec.cycleCount;
         });
         this.closeFile();
         this.lastValueReceived = this.skPlugin.getTime();
@@ -104,7 +105,8 @@ class DeviceHandler {
                         // Resume the last run...
                         this.skPlugin.debug(`Resuming previous run log for ${this.config.name}`);
                         this.log.rec.status = 1;
-                        this.log.update();
+                        this.log.update(); //fixme Does this generate a spurious increment of cycleCount?
+
                     }
                     else {
                         // We need a NEW run record...
@@ -149,7 +151,7 @@ class DeviceHandler {
     reportSK() {
         var values = [];
 
-        if (!_.isEmpty(this.config.skHoursPath)) {
+        if (!_.isEmpty(this.config.skHoursPath)) {  //fixme -- transmogrify into all child values
             values.push(
                 { path: this.config.skHoursPath, value: this.getTotalTime() }
             );
@@ -164,7 +166,7 @@ class DeviceHandler {
         if (!_.isEmpty(values)) {
             this.skPlugin.sendSKValues(values);
         }
-        
+
         this.lastSKReport = this.skPlugin.getTime();
     }
 
@@ -178,7 +180,7 @@ class DeviceHandler {
                 return val;
             }
             else {
-                this.skPlugin.debug(`Ignoring invalid date format: ${dt}`);                    
+                this.skPlugin.debug(`Ignoring invalid date format: ${dt}`);
             }
         }
         else if (typeof dt === 'number') {
@@ -200,7 +202,7 @@ class DeviceHandler {
         this.log.forEach((rec, recNum) => {
             if (rec.startTime >= startRange && rec.startTime <= endRange) {
                 let secs = this.elapsedSecs(rec.startTime, rec.endTime);
-                res.history.push({ start: new Date(rec.startTime).toISOString(), end: new Date(rec.endTime).toISOString(), runTime: secs });
+                res.history.push({ start: new Date(rec.startTime).toISOString(), end: new Date(rec.endTime).toISOString(), runTime: secs, cycleCount: rec.cycleCount});
                 res.historyRunTime += secs;
             }
         });

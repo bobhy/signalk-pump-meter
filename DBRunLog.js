@@ -8,11 +8,13 @@ class DBRunLog extends FixedRecordFile {
         super(Parser.start()
                     .int8("status")
                     .doublebe("startTime")
-                    .doublebe("endTime"));
+                    .doublebe("endTime")
+                    .int32("cycleCount"));
         this.rec = {};
         this.rec.status = 0;
         this.rec.startTime = 0;
         this.rec.endTime = 0;
+        this.rec.cycleCount = 0;    //fixme need to fetch from persistent history?
     }
 
     get recNumber() {
@@ -33,6 +35,7 @@ class DBRunLog extends FixedRecordFile {
         this.rec.status = 1;
         this.rec.startTime = Date.now();
         this.rec.endTime = this.rec.startTime;
+        this.rec.cycleCount += 1;
         this.appendRecord(this.rec);
     }
 
