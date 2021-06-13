@@ -1,5 +1,5 @@
 'use strict';
-
+/*
 class MainPage extends React.Component {
 
       constructor(props) {
@@ -78,6 +78,7 @@ ReactDOM.render(<MainPage />, domContainer);
 
 ---
 
+*/
 
 import React, { Component } from "react";
 import ReactDOM from "react-dom";

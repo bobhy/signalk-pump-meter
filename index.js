@@ -3,20 +3,20 @@ const SignalKPlugin = require('signalk-plugin-base');
 const DeviceHandler = require('./DeviceHandler.js');
 
 
-class HourMeterPlugin extends SignalKPlugin {
+class PumpMeterPlugin extends SignalKPlugin {
 
   constructor(app) {
-    super({app, id: 'signalk-hour-meter', name: 'Hour meter', description: 'Synthesizes hour meter data when other SignalK values indicate a device is on'});
+    super({app, id: 'signalk-pump-meter', name: 'Pump meter', description: 'Synthesizes pump meter runtime and cycle count when other SignalK values indicate the pump is running'});
 
-    this.optObj({propName: 'devices', title: 'Devices to synthesize hour meters', isArray: true, itemTitle: 'Device'});
+    this.optObj({propName: 'devices', title: 'Devices for which to synthesize pump run meters', isArray: true, itemTitle: 'Device'});
     this.optStr({propName: 'name', title: 'Device name', required: true });    
-    this.optStr({propName: 'skMonitorPath', title: 'SignalK value that indicates device is on', required: true  });
-    this.optInt({propName: 'secTimeout', title: 'SignalK timeout (secs)', defaultVal: 60, longDescription: 'The number of seconds of no SignalK data before device assumed off', required: true});
+    this.optStr({propName: 'skMonitorPath', title: 'SignalK value that indicates pump is on', required: true  });
+    this.optInt({propName: 'secTimeout', title: 'SignalK timeout (secs)', defaultVal: 60, longDescription: 'The number of seconds of no SignalK data before pump assumed off', required: true});
     this.optInt({propName: 'secResume', title: 'SignalK resume last run (secs)', defaultVal: 300, longDescription: 'Resume tracking previous run if ON detected again within this many seconds', required: true});
-    this.optStr({propName: 'skHoursPath', title: 'SignalK path to output hour meter data', longDescription: 'Leave blank to disable'});
-    this.optStr({propName: 'skStatusPath', title: 'SignalK path to output device status', longDescription: 'Leave blank to disable'});
-    this.optNum({propName: 'offsetHours', title: 'Hours already on device', defaultVal: 0 });
-    this.optInt({propName: 'secReportInterval', title: 'Reporting interval (secs)', defaultVal: 30, longDescription: 'Number of seconds between each hour meter/status report', required: true});
+    this.optStr({propName: 'skPumpsPath', title: 'SignalK path under which to emit pump run data', longDescription: 'Leave blank to disable'});
+    this.optStr({propName: 'skStatusPath', title: 'SignalK path to output pump status', longDescription: 'Leave blank to disable'});
+    this.optNum({propName: 'offsetHours', title: 'Hours already on pump', defaultVal: 0 });
+    this.optInt({propName: 'secReportInterval', title: 'Reporting interval (secs)', defaultVal: 30, longDescription: 'Number of seconds between each report of pump run data', required: true});
     this.optObjEnd();
 
     this.unsub = [];
@@ -112,6 +112,6 @@ class HourMeterPlugin extends SignalKPlugin {
 
 
 module.exports = function (app) {
-  var plugin = new HourMeterPlugin(app);
+  var plugin = new PumpMeterPlugin(app);
   return plugin;
 }
