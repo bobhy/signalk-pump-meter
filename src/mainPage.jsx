@@ -143,7 +143,7 @@ class MainPage extends React.Component {
 
       componentDidMount() {
         if (!devMode) {
-          fetch("/plugins/signalk-hour-meter/api/devices")
+          fetch("/plugins/signalk-pump-meter/api/devices")
             .then((res) => {
               return res.json()
             })
@@ -182,7 +182,7 @@ class MainPage extends React.Component {
         if (!devMode) {
           let sStart = this.state.startDate.toISOString();
           let sEnd = this.state.endDate.toISOString()
-          fetch(`/plugins/signalk-hour-meter/api/history/${this.state.currentDevice}?start=${sStart}&end=${sEnd}`)
+          fetch(`/plugins/signalk-pump-meter/api/history/${this.state.currentDevice}?start=${sStart}&end=${sEnd}`)
             .then((res) => {
               return res.json()
             })
@@ -244,7 +244,7 @@ class MainPage extends React.Component {
           return (
             <div>
 
-              <h1>Hour meter</h1>
+              <h1>Pump Meter</h1>
               <div className="device section">
                 <div className="formLabel">Device</div>
                 <DropdownList 

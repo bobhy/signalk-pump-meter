@@ -1,0 +1,36 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Attach by Process ID",
+            "processId": "${command:PickProcess}",
+            "request": "attach",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "type": "pwa-node",
+            "cwd": "/home/bob/src/signalk/work"
+        },
+        {
+            "type": "pwa-node",
+            "request": "launch",
+            "name": "sk via work",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "cwd": "/home/bob/src/signalk/work",
+            "env": {
+                "DEBUG": "signalk-hour-meter, signalk-pump-meter"
+            },
+            "program": "node_modules/signalk-server/bin/signalk-server",
+            "args": [
+                "-c",
+                "/home/bob/src/signalk/work",
+                "-s",
+                "skdev-n2k-w-bat2.json"
+            ]
+        },
+    ]

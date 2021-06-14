@@ -17,6 +17,7 @@ class DBRunLog extends FixedRecordFile {
         this.rec.cycleCount = 0;    //fixme need to fetch from persistent history?
     }
 
+    // record number, 0-origin
     get recNumber() {
         return this.recordCount() - 1;
     }
@@ -31,7 +32,8 @@ class DBRunLog extends FixedRecordFile {
     }
 
 
-    appendNewRun() {
+    appendNewRun() {        //fixme generates 0-length dummy record, with bogus status of ON.
+                            // really, device handler should deal with guessing initial state.
         this.rec.status = 1;
         this.rec.startTime = Date.now();
         this.rec.endTime = this.rec.startTime;
