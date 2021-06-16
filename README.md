@@ -6,6 +6,8 @@ Included in this project is a simple Webapp which can display the accumulated se
 
 This code is heavily based on [signalk-pump-meter](https://github.com/joelkoz/signalk-pump-meter) by JoelKoz, credit where credit is due.
 
+NOTE: Work in progress, see [below](#work-in-progress)
+
 ## How it works
 You configure the plugin to monitor a signal value from the device to be monitored.  This value can be an on/off or a numeric value such as voltage or current, so long as it falls to zero when the device is off.  There is a timeout as well, and the device is considered off no signal values are received within that timeout.
 
@@ -83,3 +85,14 @@ Example:
 ```
 http://my-server.local/plugins/signalk-pump-meter/api/history/portEngine?start=2019-10-01&end=2019-11-01
 ```
+
+# Work In Progress
+Not ready for prime time yet.
+
+Plugin:
+* history of prior sessions
+* optionally emit NMEA 2000 
+
+WebApp
+* add support in some other gauges packages.
+* 
