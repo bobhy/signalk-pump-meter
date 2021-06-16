@@ -1,7 +1,7 @@
 {
   "name": "signalk-pump-meter",
   "version": "1.0.0",
-  "description": "Synthesizes pump meter runtime and cycle count when other SignalK values indicate the pump is running",
+  "description": "Reports pump runtime and cycle count based on some other SignalK value that indicates the device is currently running",
   "main": "index.js",
   "dependencies": {
     "babel-loader": "^8.2.2",
@@ -43,7 +43,6 @@
   "scripts": {
     "build": "NODE_ENV=production webpack --config webpack.prod.js",
     "dev": "NODE_ENV=development webpack --config webpack.dev.js",
-    "build-babel": "npx babel src --out-dir public"
   },
   "author": "Bob Hyman",
   "license": "ISC"
