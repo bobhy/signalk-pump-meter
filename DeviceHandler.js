@@ -39,24 +39,24 @@ class DeviceReadings {
      *
      * @param {*} sampleValue       - the observed value.  Any truthy value indicates device is ON.
      * @param {Date} sampleDate     - the timestamp of the value (which, if pulled from a log, might not be "now")
+     * *                              So far, however, I can't figure out how to get the timestamp from the log, so
+     *                                the played-back data is shifted into the present time.
      * @memberof DeviceReadings
      */
     NewSample(sampleValue, sampleDate        // timestamp of new value (might be read from log)
     ) {
-        if (!sampleValue == !this.lastSample) { // if value hasn't changed... (`!` converts anything to truthy)            
-            // don't have to update anything  
-        } else {                                // value *has* changed
+        if (!sampleValue != !this.lastSample) { // if value *has* changed from last sample
             if (!this.lastSample) {             // and last sample was OFF, so start a new ON cycle
-                this.lastRunDate = sampleDate    // 'last' cycle is the one starting now
+                this.lastRunDate = sampleDate   // 'last' cycle is the one starting now
                 this.lastRunTimeMs = 0
                 this.cycleCount += 1            // count cycles at start of cycle; i.e OFF->ON
             } else {                            // last sample was ON, so this is end of a run
                 this.lastRunTimeMs = (sampleDate - this.lastRunDate)
                 this.runTimeMs += this.lastRunTimeMs    // add last run to accumulated run
             }
-        }
+        }                                       // if value unchanged, no calculations needed
 
-        this.lastSampleDate = sampleDate    // time marches on...
+        this.lastSampleDate = sampleDate        // time marches on...
         this.lastSample = sampleValue
     }
 
@@ -217,9 +217,10 @@ class DeviceHandler {
         let startRange = this.parseDate(start, 0);
         let endRange = this.parseDate(end, new Date().getTime());
 
-        var res = { historyRunTime: 0, history: [] };
-        //todo some magic here...
+        //fixme return history over multiple sessions.  For now, only reports the current session.
 
+        const cur_sess = this.readings.ReportValues(Date.now());
+        const res = [{historyDate: Date.now(), ...cur_sess}];   // array of 1 row
         return res;
     }
 

@@ -23,14 +23,15 @@
             ],
             "cwd": "/home/bob/src/signalk/work",
             "env": {
-                "DEBUG": "signalk-hour-meter, signalk-pump-meter"
+                "DEBUG": "signalk-pump-meter",
+                "NODE_PATH": "/home/bob/src/signalk/work/node_modules/@signalk"
             },
-            "program": "node_modules/signalk-server/bin/signalk-server",
+            "program": "/home/bob/src/signalk/work/node_modules/signalk-server/bin/signalk-server",
             "args": [
                 "-c",
                 "/home/bob/src/signalk/work",
                 "-s",
                 "skdev-n2k-w-bat2.json"
             ]
-        },
+        }
     ]
