@@ -1,56 +1,50 @@
 # SignalK-Pump-Meter
-SignalK Pump Meter is a plugin and corresponding Webapp for the [SignalK Node Server](https://github.com/SignalK/signalk-server-node) that monitors
-the device cycle count and run time of devices on your boat by watching for related SignalK data that indicates the device is currently on.  For example, if you are reporting amperage to your bilge pump at `electrical.batteries.254.current`, this plugin can generate and track `electrical.batteries.254.cycleCount` and `electrical.batteries.254.runtime` (and related statistics) based on on-off transitions.  These statistics are  emitted periodically and also stored in a session history which can be fetched using a JSON API.
+SignalK Pump Meter is a plugin and corresponding Webapp for the [SignalK Node Server](https://github.com/SignalK/signalk-server-node) that monitors on / off signals from a device on your network and reports 
+the corresponding run time and duty cycle count of the device. For example, and this is the primary use case, if you are already monitoring the amperage consumed by a bilge pump, this plugin can generate and record pump runtime and count duty cycles. These statistics are emitted periodically and also stored in a session history which can be fetched using a JSON API.
 
-Included in this project is a simple Webapp which can display the accumulated session history.  It is more a test tool than usable gauge: you must click a button to get an update.
+Included in this project is a simple Webapp which can display the current statistics and accumulated session history.  It is more a test tool than usable gauge: you must click a button to see the numbers change.
 
-This code is heavily based on [signalk-pump-meter](https://github.com/joelkoz/signalk-pump-meter) by JoelKoz, credit where credit is due.
+NOTE:  The plugin is a Work In Progress (tm), see [below](#work-in-progress)
 
-NOTE: Work in progress, see [below](#work-in-progress)
+This code is heavily based on [signalk-hour-meter](https://github.com/joelkoz/signalk-hour-meter) by JoelKoz, credit where credit is due.
 
-## How it works
-You configure the plugin to monitor a signal value from the device to be monitored.  This value can be an on/off or a numeric value such as voltage or current, so long as it falls to zero when the device is off.  There is a timeout as well, and the device is considered off no signal values are received within that timeout.
-
-The plugin generates runtime statistics based on transitions in the signal value:
-* session start -- how long ago the current data session started.  The rest of the statistics are accumulated over the current session.  
-* run time -- how long the device has been ON during the current session.
-* cycle count -- how many OFF->ON transitions have been seen.
-* last run time -- now long the device ran during the most recent cycle in the session.
-* last run start -- how long ago the most recent cycle ended (the ON->OFF transition).
-
-In addition, the plugin can optionally generate a device status to report whether the device was last seen ON, OFF or incommunicato. 
 
 ## Configuration
-To configure a new device, select `Server -> Plugin Config -> pump meter` from the node server menu. To add a new device definition, press the blue **+** button.  You can define more than one device if you would like. Simply repeat this step for each device you want to track.
+Install the plugin from the SignalK Store.
 
-The `Device name` is both a name you make up for the device, as well as an identifier used for the device in the Json API to retrieve history
-reports via software. You can include spaces and punctuation
-in the device name if you wish (they will be removed to create the device identifier), but once you set the name and start collecting data, do not
-change it.  The device identifier, which is derived from the `Device name` is also used for the file name for the history storage.  Changing the name will cause a new history file to be created, losing all your previous data.
+The plugin can be configured to monitor multiple devices and these are independent of each other.  
 
-The `SignalK value that indicates device is on` is the SignalK path that is monitored by the plugin to determine if the device is on. This
-value should already be created and reported by some other component of your system
+From the SignalK node server menu, select `Server -> Plugin Config -> Pump meter`. 
+To add a new device definition, press the blue **+** button and fill in the following fields:
 
-The `SignalK timeout (secs)` is the number of seconds of "data silence" the pump meter plugin should tolerate before assuming the device has
-been turned off.  The smaller this number, the quicker the plugin can determine the device has actually been turned off. However, you don't want
-it so small that the plugin starts reporting sporadic 'on/off/on' situations.  The default value of 30 seconds is usually a good number.
+`Pump name`  
+This is a user-assigned name for the device, used on gauges and also (after removing spaces and punctuation) as an identifier in the Json API and history storage.  The name must be unique (among devices monitored by this plugin), and it should also be eternal.  The identifier is used for the saved history (files on the server), if you update the configuration and change this name, it will abandon the old history.
 
-The `SignalK path to output pump meter data` indicates the SignalK path the plugin will use to report total "life to date" run time. Note
-that the existing SignalK specification already has definitions for many paths you may want to use.  They all end in `runTime`, so if
-you do end up making up a new path, ending the name in `runTime` will at least stay consistent.  If you leave this field blank, no run time
-data will be reported on the SignalK stream.  The plugin will still log run history, and can still report the status (below) if that path
-is defined.
+`SignalK value that indicates pump is on`  
+is the SignalK path that the plugin monitors to determine if the device is on. Any non-zero numeric value or non-empty string is interpreted to mean the device is currently ON.  A zero value or empty string indicates the device is OFF. The Pump Meter plugin *listens* for a value on this path: something else in your network should be generating it.
 
-The `SignalK path to output device status` is used to report "ON" or "OFF" on the SignalK data stream.  If you do not want this report,
-leave this field blank.
+`SignalK path under which to report pump run data`  
+Is the parent path of all the statistics reported by the plugin.  For example, if you set this to `electrical.batteries.254`, the plugin will report `electrical.batteries.254.runTime`, `electrical.batteries.254.cycleCountruntime` (and others, see below).  Note that `SignalK value that indicates pump is on` does not have to be under this path, nor does `SignalK path to output pump status`: these 3 paths can be unrelated.
 
-The `pumps already on device` allows you to enter a starting pump count for the device. This is useful if you have an analog pump meter
-on the device you can take a reading off of.  You can periodically adjust this value if the reported pumps starts to drift from the
-actual pumps.  The pump meter plugin always reports total run time as "monitored run time plus pumps already on device", so changing
-this value after run time data has already recorded will in fact change the pumps reported.
+`SignalK path to output device status`  
+reports the string "ON", "OFF" or "OFFLINE" on the SignalK data stream.  If you do not want this report, leave this field blank.
 
-The `Reporting interval (secs)` indicates how often the run time and/or status will be sent over the SignalK data stream when the
-device is on.
+`Run data reporting interval (secs)`  
+indicates how often the run data statistics and status will be sent over the SignalK data stream.
+
+`Pump signal timeout (secs)`  
+is the number of seconds of "data silence" the pump meter plugin should tolerate before acting on a gap in the data.  If the plugin does not hear any report from `SignalK value that indicates pump is on` for longer than this interval, it will terminate any duty cycle that was in progress and change the reported device status to `Offline`.
+The smaller this number, the quicker the plugin can determine the device has actually been turned off. However, you don't want
+it so small that the plugin starts reporting sporadic 'on/off/on' situations.  The default value of 300 seconds (5 min) is usually a good number.
+
+## Pump run data
+
+Under the configured parent path, the pump meter plugin reports the following values:
+`sessionStart` -- Length of the current data session. (seconds)  
+`cycleCount` -- Number of ON->OFF cycles in the current data session  
+`runTime` -- Cumulative length of time the device has been ON in the current data session.  (Seconds)  
+`lastRunStart` -- How long ago the last duty cycle began (the OFF->ON transition, in seconds).  
+`lastRunTime` -- Length of time the device was on in the last duty cycle. (Seconds)  
 
 ## Reviewing the Data
 The pump Meter plugin installs a simple Webapp interface that allows you to review the data it has recorded. You can
@@ -85,6 +79,13 @@ Example:
 ```
 http://my-server.local/plugins/signalk-pump-meter/api/history/portEngine?start=2019-10-01&end=2019-11-01
 ```
+
+# Discussion
+The plugin is most useful when the SignalK server and network can be left running when you're away from the boat, otherwise there will be data gaps where the device might have been running but the plugin doesn't see the data.
+To cope with this possibility, the plugin includes its own up time in each report.  For example, it might report the bilge pump had 22 duty cycles and 60 minutes of accumulated run time *over the past 17 days and 3 hours*.  This lets you put the statistics in context: you might decide that having the bilge pump running a little more than once per day is normal. 
+
+Another challenge in monitoring runtime is detecting when there has been a recent change in the  historical pattern.  To give you some indication about this, the plugin includes the last individual duty cycle in each report: how long the device was on for the last cycle, and when that was.  For example, the plugin might report the above 22 duty cycles and 60 minutes since the plugin started and that the last duty cycle was 10 minutes long and happened yesterday.  You might conclude that 10 minutes is significantly longer than the average of 3 minutes, or you might know that there was a heavy rain last night and you have a leaky locker hatch. [[ this is admittedly crude: if you have ideas about more sophisticated statistics, let's talk.]]
+
 
 # Work In Progress
 Not ready for prime time yet.

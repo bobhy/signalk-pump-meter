@@ -6,25 +6,23 @@ const DeviceHandler = require('./DeviceHandler.js');
 class PumpMeterPlugin extends SignalKPlugin {
 
   constructor(app) {
-    super({ app, id: 'signalk-pump-meter', name: 'Pump meter', description: 'Synthesizes pump meter runtime and cycle count when other SignalK values indicate the pump is running' });
+    super({ app, id: 'signalk-pump-meter', name: 'Pump Meter', description: 'Synthesizes pump runtime and cycle count from another SignalK value that indicates the device is running' });
 
-    this.optObj({ propName: 'devices', title: 'Devices for which to synthesize pump run data', isArray: true, itemTitle: 'Device' });
-    this.optStr({ propName: 'name', title: 'Device name', required: true });
+    this.optObj({ propName: 'devices', title: 'Devices to monitor', isArray: true, itemTitle: 'Device' });
+    this.optStr({ propName: 'name', title: 'Pump name', longDescription: "User-assigned name for this device, must be unique.", required: true });
     this.optStr({
       propName: 'skMonitorPath', title: 'SignalK value that indicates pump is on', required: true
-      , longDescription: "Any non-zero value or non-empty string (truthy value) means pump is on."
+      , longDescription: "Expected to be provided by some other source.  Any non-zero value or non-empty string (truthy value) means device is currently on."
       , defaultVal: "electrical.batteries.254.current"
     });
     this.optStr({
-      propName: 'skRunStatsPath', title: 'SignalK path under which to emit pump run data'
-      , longDescription: 'Leave blank to disable'
+      propName: 'skRunStatsPath', title: 'SignalK path under which to report pump run data'
+      , longDescription: 'Plugin reports 5 statistics with this path as common prefix.  Leave blank to disable.'
       , defaultVal: "electrical.batteries.254"
     });
-    this.optStr({ propName: 'skStatusPath', title: 'SignalK path to output pump status', longDescription: 'Leave blank to disable', defaultVal: "electrical.batteries.254.status" });
-    this.optInt({ propName: 'secTimeout', title: 'SignalK timeout (secs)', defaultVal: 60, longDescription: 'The number of seconds of no SignalK data before pump assumed off', required: true });
-    this.optInt({ propName: 'secResume', title: 'SignalK resume last run (secs)', defaultVal: 300, longDescription: 'Resume tracking previous run if ON detected again within this many seconds', required: true });
-    this.optNum({ propName: 'offsetHours', title: 'Hours already on pump', defaultVal: 0 });
-    this.optInt({ propName: 'secReportInterval', title: 'Reporting interval (secs)', defaultVal: 30, longDescription: 'Number of seconds between each report of pump run data', required: true });
+    this.optStr({ propName: 'skStatusPath', title: 'SignalK path to output pump status', longDescription: 'Can be any path, not related to above.  Leave blank to disable', defaultVal: "electrical.batteries.254.status" });
+    this.optInt({ propName: 'secReportInterval', title: 'Run data reporting interval (secs)', defaultVal: 30, longDescription: 'Number of seconds between each report of pump run data' });
+    this.optInt({ propName: 'secTimeout', title: 'Pump signal timeout (secs)', defaultVal: 300, longDescription: 'Declare the device off if no signal received for this interval.' });
     this.optObjEnd();
 
     this.unsub = [];
