@@ -20,7 +20,6 @@ class PumpMeterPlugin extends SignalKPlugin {
       , longDescription: 'Plugin reports 5 statistics with this path as common prefix.  Leave blank to disable.'
       , defaultVal: "electrical.batteries.254"
     });
-    this.optStr({ propName: 'skStatusPath', title: 'SignalK path to output pump status', longDescription: 'Can be any path, not related to above.  Leave blank to disable', defaultVal: "electrical.batteries.254.status" });
     this.optInt({ propName: 'secReportInterval', title: 'Run data reporting interval (secs)', defaultVal: 30, longDescription: 'Number of seconds between each report of pump run data' });
     this.optInt({ propName: 'secTimeout', title: 'Pump signal timeout (secs)', defaultVal: 300, longDescription: 'Declare the device off if no signal received for this interval.' });
     this.optObjEnd();

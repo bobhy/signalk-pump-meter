@@ -8,6 +8,15 @@ function toSec(msValue) {   // convert MS to rounded # sec
     return Math.round(msValue / 1000.0)
 }
 
+/* allowed values of <reportPath>.status 
+ */
+
+_device_status = {
+    OFFLINE: 'OFFLINE',    // device not currently reporting anything
+    OFF: "OFF",         // device off (not running)
+    ON: "ON"           // device on (is running)
+}
+
 /**
  * Device run time statistics
  * Since samples are collected (much?) more frequently than values are reported out, internal values optimized for efficient recording.
@@ -29,6 +38,7 @@ class DeviceReadings {
         this.sessionStartDate = Date.now()   // timestamp of start of data recording session
         this.lastSample = 0             // last known sample value of the device
         this.lastSampleDate = Date.now()  // timestamp of last sample (ms since 1-jan-1970)
+        this.status = _device_status.OFFLINE
     }
 
     /**
@@ -47,10 +57,12 @@ class DeviceReadings {
     ) {
         if (!sampleValue != !this.lastSample) { // if value *has* changed from last sample
             if (!this.lastSample) {             // and last sample was OFF, so start a new ON cycle
+                this.status = _device_status.ON
                 this.lastRunDate = sampleDate   // 'last' cycle is the one starting now
                 this.lastRunTimeMs = 0
                 this.cycleCount += 1            // count cycles at start of cycle; i.e OFF->ON
             } else {                            // last sample was ON, so this is end of a run
+                this.status = _device_status.OFF
                 this.lastRunTimeMs = (sampleDate - this.lastRunDate)
                 this.runTimeMs += this.lastRunTimeMs    // add last run to accumulated run
             }
@@ -78,6 +90,7 @@ class DeviceReadings {
             // time from end of last cycle to start of current tells me how fast my bilge is filling up?
             , lastRunTime: toSec(!this.lastSample ? this.lastRunTimeMs : (nowMs - this.lastRunDate))
             , sessionStart: toSec(nowMs - this.sessionStartDate)
+            , status: this.status
         }
     }
 
@@ -129,7 +142,7 @@ class DeviceHandler {
         skPlugin.subscribeVal(this.skStream, this.onMonitorValue, this);
 
         this.readings = new DeviceReadings();
-        this.lastSKReport = 0; 
+        this.lastSKReport = 0;
 
         // open log, fetch saved values
         //later this.readings.Deserialize( saved_values)
@@ -153,9 +166,11 @@ class DeviceHandler {
      */
     onHeartbeat(timer) {
         //this.skPlugin.debug(`onHeartbeat(${JSON.stringify(timer)})`);
-        if (toSec(Date.now() - this.readings.lastSampleDate) > this.config.secTimeout){
-            this.skPlugin.debug(`Device data timeout, marking ${this.config.name} as stopped}`)
+        if (toSec(Date.now() - this.readings.lastSampleDate) > this.config.secTimeout) {
+            this.skPlugin.debug(`Device data timeout, marking ${this.config.name} as offline}`)
             this.readings.NewSample(0, Date.now())
+            this.readings.status = _device_status.OFFLINE   // override NewSample logic
+            this.reportSK();    // emit offline status
         }
         if (toSec(Date.now() - this.lastSKReport) >= this.config.secReportInterval) {
             this.reportSK();
@@ -179,7 +194,7 @@ class DeviceHandler {
         var values = [];
 
 
-        for ( const [ k, v ] of Object.entries(this.readings.ReportValues(Date.now()))) {   //ugly k,v iteration!
+        for (const [k, v] of Object.entries(this.readings.ReportValues(Date.now()))) {   //ugly k,v iteration!
             values.push({ path: `${this.config.skRunStatsPath}.${k}`, value: v })
         }
 
@@ -220,7 +235,7 @@ class DeviceHandler {
         //fixme return history over multiple sessions.  For now, only reports the current session.
 
         const cur_sess = this.readings.ReportValues(Date.now());
-        const res = [{historyDate: Date.now(), ...cur_sess}];   // array of 1 row
+        const res = [{ historyDate: Date.now(), ...cur_sess }];   // array of 1 row
         return res;
     }
 

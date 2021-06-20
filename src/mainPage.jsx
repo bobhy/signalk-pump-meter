@@ -211,6 +211,12 @@ class MainPage extends React.Component {
                           sortMethod: (a, b) => { return a - b }
                         },
                         {
+                          Header: "Current status",
+                          id: "status",
+                          className: "colText",
+                          accessor: h => h.status,
+                        },
+                        {
                           Header: "Session duration (h)",
                           id: "session",
                           className: 'colNumber',

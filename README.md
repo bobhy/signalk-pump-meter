@@ -24,10 +24,7 @@ This is a user-assigned name for the device, used on gauges and also (after remo
 is the SignalK path that the plugin monitors to determine if the device is on. Any non-zero numeric value or non-empty string is interpreted to mean the device is currently ON.  A zero value or empty string indicates the device is OFF. The Pump Meter plugin *listens* for a value on this path: something else in your network should be generating it.
 
 `SignalK path under which to report pump run data`  
-Is the parent path of all the statistics reported by the plugin.  For example, if you set this to `electrical.batteries.254`, the plugin will report `electrical.batteries.254.runTime`, `electrical.batteries.254.cycleCountruntime` (and others, see below).  Note that `SignalK value that indicates pump is on` does not have to be under this path, nor does `SignalK path to output pump status`: these 3 paths can be unrelated.
-
-`SignalK path to output device status`  
-reports the string "ON", "OFF" or "OFFLINE" on the SignalK data stream.  If you do not want this report, leave this field blank.
+Is the parent path of all the statistics reported by the plugin.  For example, if you set this to `electrical.batteries.254`, the plugin will report `electrical.batteries.254.runTime`, `electrical.batteries.254.cycleCountruntime` (and others, see below).  Note that `SignalK value that indicates pump is on` does not have to be under this path: these paths can be unrelated.
 
 `Run data reporting interval (secs)`  
 indicates how often the run data statistics and status will be sent over the SignalK data stream.
@@ -41,6 +38,7 @@ it so small that the plugin starts reporting sporadic 'on/off/on' situations.  T
 
 Under the configured parent path, the pump meter plugin reports the following values:
 `sessionStart` -- Length of the current data session. (seconds)  
+`status` -- Current device status, one of: "ON" (device is running), "OFF" (device is not running) and "OFFLINE" (device has not reported data for "too" long.)
 `cycleCount` -- Number of ON->OFF cycles in the current data session  
 `runTime` -- Cumulative length of time the device has been ON in the current data session.  (Seconds)  
 `lastRunStart` -- How long ago the last duty cycle began (the OFF->ON transition, in seconds).  
