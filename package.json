@@ -6,6 +6,7 @@
   "dependencies": {
     "babel-loader": "^8.2.2",
     "baconjs": "^1.0.1",
+    "fast-json-stringify": "^2.7.6",
     "lodash": "^4.17.4",
     "signalk-plugin-base": "^1.4.0",
     "structured-binary-file": "^1.0.1"

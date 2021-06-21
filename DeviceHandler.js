@@ -1,6 +1,7 @@
 const { round } = require('lodash');
 const _ = require('lodash');
-const DBRunLog = require('./DBRunLog.js');
+const FixedRecordFile = require("structured-binary-file").FixedRecordFile;
+const Parser = require("binary-parser-encoder").Parser;
 
 // pump run statistics logged and reported periodically
 
@@ -11,16 +12,17 @@ function toSec(msValue) {   // convert MS to rounded # sec
 /* allowed values of <reportPath>.status 
  */
 
-_device_status = {
+const _device_status = {
     OFFLINE: 'OFFLINE',    // device not currently reporting anything
     OFF: "OFF",         // device off (not running)
     ON: "ON"           // device on (is running)
 }
 
+
 /**
  * Device run time statistics
  * Since samples are collected (much?) more frequently than values are reported out, internal values optimized for efficient recording.
- * The reporting out {@link reportValues} calculates tractible statistics.
+ * The reporting out {@link reportValues} calculates user-friendly statistics.
  *
  * @class DeviceReadings
  */
@@ -28,18 +30,43 @@ class DeviceReadings {
 
     /**
      * Creates an instance of DeviceReadings.
+     * 
      * @memberof DeviceReadings
      */
-    constructor(cycleCount = 0, runTimeMs = 0, lastRunDate) {
+    constructor() {
+
         this.cycleCount = 0             // number of OFF->ON transitions
         this.runTimeMs = 0              // integer number of ms
-        this.lastRunDate = 0            // # sec since last observed OFF->ON transition (a long time ago)
+        this.lastRunDate = 0            // # ms since last observed OFF->ON transition (a long time ago)
         this.lastRunTimeMs = 0          // duration of last observed ON time (only updated when ON->OFF is seen)
         this.sessionStartDate = Date.now()   // timestamp of start of data recording session
         this.lastSample = 0             // last known sample value of the device
         this.lastSampleDate = Date.now()  // timestamp of last sample (ms since 1-jan-1970)
         this.status = _device_status.OFFLINE
     }
+
+
+    /**
+     * Construct a binary record parser for this object
+     * 
+     * It's necessary to list all the fields a second time, but at least it's in the same class...
+     *
+     * @return {Parser} 
+     * @memberof DeviceReadings
+     */
+    GetParser() {
+        return Parser.start()
+            .endianess("big")  // network byte order even on (littleendian) intel-alike processors.
+            .doublebe("sessionStartDate")  //puzzle why not int64?   date as ms since 1/1/70
+            .int32("cycleCount")
+            .int32("runtimeMs")
+            .doublebe("lastRunDate")
+            .int32("lastRunTimeMs")
+            .int32("lastSample")        // real-world value coerced to boolean in history.
+            .doublebe("lastSampleDate")
+            .string("status", { length: 16, trim: true })     // value encoded by _device_status_encode()
+    }
+
 
     /**
      * Account for a new sample observation
@@ -69,11 +96,12 @@ class DeviceReadings {
         }                                       // if value unchanged, no calculations needed
 
         this.lastSampleDate = sampleDate        // time marches on...
-        this.lastSample = sampleValue
+        this.lastSample = !!sampleValue         // convert sample value of any type to its "truthy" value.
     }
 
+
     /**
-     * Export values for external consumption.
+     * Emit values for external consumption on the network
      * 
      * Timestamps converted to relative elapsed time (and rounded to sec).
      * RunTime and LastRunTime adjusted for current run in progress if devce ON
@@ -93,34 +121,75 @@ class DeviceReadings {
             , status: this.status
         }
     }
+}
 
+/**
+ * Maintain a persistent history of old sessions
+ *
+ * @class SessionHistory
+ * @extends {FixedRecordFile}
+ */
+class SessionHistory extends FixedRecordFile {
     /**
-     *
-     * @memberof DeviceReadings
-    /**
-     * Return loggable snapshot of current values which can be restored via {@link this.Deserialize}.
-     *
-     * @return {string} -- string representation of current values 
-     * @memberof DeviceReadings
+     * Creates an instance of SessionHistory.
+     * @param {Parser} parser -- binary file parser for an instance of {@link DeviceReadings}
+     * @param {String} file_name -- full path to file for storing history
+     * @memberof SessionHistory
      */
-    Serialize() {
-        return JSON.stringify(this)
+    constructor(parser, file_name) {
+
+        super(parser)
+        this.file_name = file_name
     }
 
     /**
-     * Update running values from loggable snapshot (as provided by {@link this.Serialize}).
+     * Extend the previous data session, if it is fresh enough; otherwise start a new session.
      *
-     * @param {*} blob
-     * @memberof DeviceReadings
+     * @param {*} current_session -- default session values
+     * @param {number} [session_continue_ms=0] -- resume prior session if last reading is within this interval (ms)
+     * @return {*} -- updated session values
+     * @memberof SessionHistory
      */
-    Deserialize(blob) {
-        new_vals = JSON.parse(blob)
-        for ([k, v] in new_vals.entries()) {
-            this[k] = v
+    ExtendSession(current_session, session_continue_ms = 0) {
+        try {
+            this.open(this.file_name)
+            if (this.recordCount() > 0) {
+                const prior_session = this.readRecord(this.recordCount() - 1)
+                if (Date.now() - prior_session.lastSampleDate < session_continue_ms) {
+                    Object.assign(current_session, prior_session)  // resume all values from old session
+                }
+            }
+
+            // append a new session record in any case. (means might have 2 sessions with same start time...)
+            this.appendRecord(current_session)
+        } catch (e) {
+            console.error(`${e} starting new session from history ${this.file_name}`)
+        } finally {
+            this.close()
+        }
+
+        return current_session
+    }
+
+
+    /**
+     * Update current session data in persistent file.
+     * Overwrite most recent record.
+     *
+     * @param {*} session
+     * @memberof SessionHistory
+     */
+    CheckpointValues(session) {
+        try {
+            this.open(this.file_name)
+            this.writeRecord(this.recordCount() - 1, session)
+        } catch (e) {
+            console.error(`${e} checkpointing session values to history ${this.file_name}.`)
+        } finally {
+            this.close()
         }
     }
 }
-
 
 /**
  * Handle a pump-style device (??)
@@ -142,19 +211,17 @@ class DeviceHandler {
         skPlugin.subscribeVal(this.skStream, this.onMonitorValue, this);
 
         this.readings = new DeviceReadings();
+        this.history = new SessionHistory(this.readings.GetParser(), `${this.skPlugin.dataDir}/${this.id}.dat`)
+        this.readings = this.history.ExtendSession(this.readings, config.secTimeout*1000)
+
         this.lastSKReport = 0;
-
-        // open log, fetch saved values
-        //later this.readings.Deserialize( saved_values)
-
         //debug this.reportSK();
     }
 
 
     stop() {
         this.skPlugin.debug(`Stopping ${this.config.name}`);
-        // serialize reading values
-        // write to log
+        this.history.CheckpointValues(this.readings);
     }
 
 
@@ -174,6 +241,7 @@ class DeviceHandler {
         }
         if (toSec(Date.now() - this.lastSKReport) >= this.config.secReportInterval) {
             this.reportSK();
+            this.history.CheckpointValues(this.readings)
         }
     }
 
@@ -192,7 +260,6 @@ class DeviceHandler {
 
     reportSK() {
         var values = [];
-
 
         for (const [k, v] of Object.entries(this.readings.ReportValues(Date.now()))) {   //ugly k,v iteration!
             values.push({ path: `${this.config.skRunStatsPath}.${k}`, value: v })
@@ -232,11 +299,28 @@ class DeviceHandler {
         let startRange = this.parseDate(start, 0);
         let endRange = this.parseDate(end, new Date().getTime());
 
-        //fixme return history over multiple sessions.  For now, only reports the current session.
+        let res = []
+        this.history.open(this.history.file_name)
 
-        const cur_sess = this.readings.ReportValues(Date.now());
-        const res = [{ historyDate: Date.now(), ...cur_sess }];   // array of 1 row
-        return res;
+        try {
+            this.history.forEach(rec => {
+                if (startRange <= rec.lastSampleDate && endRange >= rec.sessionStartDate) {
+                    res.push({ historyDate: Date.now(), ...rec })
+                }
+            })
+        }
+        catch (e) {
+            console.error(`${e} fetching session history from ${this.history.file_name}`)
+        }
+        finally {
+            this.history.close()
+        }
+
+        return res
+
+        //        const cur_sess = this.readings.ReportValues(Date.now());
+        //const res = [{ historyDate: Date.now(), ...cur_sess }];   // array of 1 row
+        //return res;
     }
 
 
