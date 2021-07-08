@@ -48,6 +48,9 @@
     "webpack-merge": "^4.0.0"
   },
   "scripts": {
+    "do_inst": "rm -rf node_modules; npm install; ln -sf  ../../@signalk/ node_modules/signalk-server/node_modules/@signalk",
+    "do_test_setup": "npm link; cd test/skserv/config; npm install ../../..",
+    "test_server": "cd test/skserv; ./skserv",
     "build": "NODE_ENV=production webpack --config webpack.prod.js",
     "dev": "NODE_ENV=development webpack --config webpack.dev.js"
   },

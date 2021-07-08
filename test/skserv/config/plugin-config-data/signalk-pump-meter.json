@@ -1,0 +1,15 @@
+{
+  "configuration": {
+    "devices": [
+      {
+        "name": "bilge1",
+        "skMonitorPath": "electrical.batteries.2.current",
+        "skRunStatsPath": "electrical.batteries.2",
+        "secReportInterval": 30,
+        "secTimeout": 300
+      }
+    ]
+  },
+  "enabled": true,
+  "enableDebug": true
+}
