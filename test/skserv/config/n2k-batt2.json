@@ -1,0 +1,63 @@
+{
+    "vessel": {
+        "name": "OffBeatTest",
+        "brand": "Island Packet",
+        "type": "27",
+        "uuid": "urn:mrn:signalk:uuid:c0d79334-4e25-4245-8892-54e8ccc8021e"
+    },
+    "interfaces": {
+        "applicationData": true,
+        "appstore": true,
+        "logfiles": true,
+        "nmea-tcp": true,
+        "playground": true,
+        "plugins": true,
+        "providers": true,
+        "rest": true,
+        "tcp": true,
+        "webapps": true,
+        "ws": true
+    },
+    "ssl": false,
+    "pipedProviders": [
+        {
+            "id": "n2kWithBatt2",
+            "pipeElements": [
+                {
+                    "type": "providers/filestream",
+                    "options": {
+                        "filename": "n2k-batt2.data",
+                        "providerId": "n2kFromFile"
+                    },
+                    "optionMappings": [
+                        {
+                            "fromAppProperty": "argv.n2kfilename",
+                            "toOption": "filename"
+                        }
+                    ]
+                },
+                {
+                    "type": "providers/liner"
+                },
+                {
+                    "type": "providers/canboatjs"
+                },
+                {
+                    "type": "providers/timestamp-throttle"
+                },
+                {
+                    "type": "providers/n2k-signalk"
+                }
+            ]
+        }
+    ],
+    "security": {
+        "strategy": "./tokensecurity"
+    },
+    "mdns": true,
+    "wsCompression": false,
+    "enablePluginLogging": true,
+    "port": 3000,
+    "sslport": 3443,
+    "pruneContextsMinutes": 60
+}

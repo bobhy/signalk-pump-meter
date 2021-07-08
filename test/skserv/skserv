@@ -1,0 +1,4 @@
+#!/bin/sh
+##DEBUG=signalk:interfaces:plugins \
+DEBUG=signalk-pump-meter,signalk-hour-meter ../../node_modules/signalk-server/bin/signalk-server \
+-c config/ -s n2k-batt2.json $*

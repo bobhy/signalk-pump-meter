@@ -15,9 +15,9 @@
             "cwd": "/home/bob/src/signalk/work"
         },
         {
+            "name": "sk via work",
             "type": "pwa-node",
             "request": "launch",
-            "name": "sk via work",
             "skipFiles": [
                 "<node_internals>/**"
             ],
@@ -32,6 +32,25 @@
                 "/home/bob/src/signalk/work",
                 "-s",
                 "skdev-n2k-w-bat2.json"
+            ]
+        },
+        {
+            "name": "skserv in project",
+            "type": "pwa-node",
+            "request": "launch",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "cwd": "${fileWorkspaceFolder}/test/skserv",
+            "env": {
+                "DEBUG": "signalk-pump-meter"
+            },
+            "program": "${fileWorkspaceFolder}/node_modules/signalk-server/bin/signalk-server",
+            "args": [
+                "-c",
+                "${fileWorkspaceFolder}/test/skserv/config",
+                "-s",
+                "n2k-batt2.json"
             ]
         }
     ]
