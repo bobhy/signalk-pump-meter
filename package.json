@@ -6,7 +6,7 @@
   "license": "ISC",
   "main": "index.js",
   "dependencies": {
-    "@signalk/signalk-schema": "^1.5.1",
+    "@signalk/signalk-schema": "^1.6.0",
     "babel-loader": "^8.0.0",
     "baconjs": "^1.0.0",
     "fast-json-stringify": "^2.7.7",
@@ -32,6 +32,8 @@
     "@babel/preset-react": "^7.0.0",
     "css-loader": "^3.2.0",
     "file-loader": "^4.3.0",
+    "jasmine": "^3.8.0",
+    "jasmine-browser-runner": "^0.6.0",
     "moment": "^2.0.0",
     "react": "^16.14.0",
     "react-dom": "^16.14.0",
@@ -50,9 +52,11 @@
   "scripts": {
     "do_inst": "rm -rf node_modules; npm install; ln -sf  ../../@signalk/ node_modules/signalk-server/node_modules/@signalk",
     "do_test_setup": "npm link; cd test/skserv/config; npm install ../../..",
-    "test_server": "cd test/skserv; ./skserv",
+    "test": "cd test/skserv; ./skserv",
     "build": "NODE_ENV=production webpack --config webpack.prod.js",
-    "dev": "NODE_ENV=development webpack --config webpack.dev.js"
+    "dev": "NODE_ENV=development webpack --config webpack.dev.js",
+    "test_server": "jasmine",
+    "test_client": "jasmine-browser-runner runSpecs"
   },
   "engines": {
     "node": ">= 12.0.0",
