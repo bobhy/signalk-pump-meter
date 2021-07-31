@@ -1,0 +1,9 @@
+run a signalk-server to support test suite.
+this configuration will automatically load the current plugin (from file:../..) 
+and will play back canned data readings from ./n2k-readings.json.
+
+You specify the plugin configuration by contents of config/plugin-config-data/signalk-pump-meter.json (sorry, hardcoded name).
+For now, to change plugin configuration, it is necessary to write a new config file and restart the server.
+
+A future wish is to find a provider for signalk-server that collects posts to some other port instead of reading from a canned response file.
+then unit tests could simply POST test data to that readings port interspersed with plugin tests, much more modular.

@@ -1,0 +1,4 @@
+#!/bin/sh
+##DEBUG=signalk:interfaces:plugins \
+DEBUG=signalk-pump-meter ../../node_modules/signalk-server/bin/signalk-server \
+-c config/ -s n2k-data.json --n2kfilename n2k-data1.data $*

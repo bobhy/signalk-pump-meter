@@ -1,0 +1,18 @@
+[
+  {
+    "context": "vessels.self",
+    "updates": [
+      {
+        "values": [
+          {
+            "path": "",
+            "value": {
+              "uuid": "urn:mrn:signalk:uuid:9ed2a139-fdbf-41ee-b41d-25dfbee1d374",
+              "name": "Off Beat1"
+            }
+          }
+        ]
+      }
+    ]
+  }
+]

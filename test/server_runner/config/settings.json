@@ -1,0 +1,26 @@
+{
+  "interfaces": {
+    "applicationData": true,
+    "appstore": true,
+    "logfiles": true,
+    "nmea-tcp": true,
+    "playground": true,
+    "plugins": true,
+    "providers": true,
+    "rest": true,
+    "tcp": true,
+    "webapps": true,
+    "ws": true
+  },
+  "ssl": false,
+  "pipedProviders": [],
+  "security": {
+    "strategy": "./tokensecurity"
+  },
+  "mdns": true,
+  "wsCompression": false,
+  "enablePluginLogging": true,
+  "port": 3000,
+  "sslport": 3443,
+  "pruneContextsMinutes": 60
+}

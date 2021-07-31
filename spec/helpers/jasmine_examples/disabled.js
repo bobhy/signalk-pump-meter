@@ -1,3 +1,4 @@
+// original file name SpecHelper.js 
 beforeEach(function () {
   jasmine.addMatchers({
     toBePlaying: function () {
