@@ -51,6 +51,10 @@ class MockApp {
     setProviderStatus(msg) {
         console.log(`Plugin status: ${msg}`);
     }
+
+    setPluginStatus(msg) {
+        console.log(`Plugin status: ${msg}`);
+    }
 }
 
 module.exports = {

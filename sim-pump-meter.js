@@ -5,27 +5,28 @@ const MockApp = require('./mocks.js').MockApp;
 
 (function() {
 
-    const dataPath = "/Users/Joel/Workspaces/nodejs/signalk/data";
+    const pluginMonitorPath = "electrical.battery.253.current";
+    const pluginStatsPath = "electrical.battery.252";
+    const pluginDeviceName = "pump_metxx";
 
-    const genTempPath = 'electrical.generator.engine.coolantTemperature';
+    const dataPath = "mockdir/signalk/data";
 
     var app = new MockApp(dataPath)
 
     var plugin = new Plugin(app);
-    
+
     var options = {
        devices: [
             {
-                name: 'Generator',
-                skMonitorPath: genTempPath,
+                name: pluginDeviceName,
+                skMonitorPath: pluginMonitorPath,
+                skRunStatsPath: pluginStatsPath,
                 secTimeout: 5,
                 secResume: 15,
-                skHoursPath: 'electrical.generator.engine.runTime',
-                skStatusPath: 'electrical.generator.engine.status',
                 offsetHours: 2989.9,
                 secReportInterval: 3
             }
-       ]    
+       ]
     };
 
     plugin.start(options);
@@ -34,10 +35,10 @@ const MockApp = require('./mocks.js').MockApp;
     var simTimer;
 
     function startGenSim() {
-        console.log('Starting generator sim');
+        console.log(`Starting ${pluginDeviceName} sim`);
 
         simTimer = setInterval(function() {
-            app.streambundle.pushMockValue(genTempPath, { value: 325.7 });
+            app.streambundle.pushMockValue(pluginMonitorPath, { value: 325.7 });
         }, 2000);
 
 
@@ -51,9 +52,9 @@ const MockApp = require('./mocks.js').MockApp;
 
     function endGenSim() {
         console.log('Runtime history: ');
-        var history = plugin.getHandler('generator').getHistory();
+        var history = plugin.getHandler(pluginDeviceName).getHistory();
         console.log(JSON.stringify(history, null, 2));
-        
+
         console.log('Stopping...');
         plugin.stop();
         console.log('Stopped');

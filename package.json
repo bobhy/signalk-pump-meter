@@ -6,15 +6,16 @@
   "license": "ISC",
   "main": "index.js",
   "dependencies": {
-    "signalk-plugin-base": "*"
+    "signalk-plugin-base": "*",
+    "baconjs": "^1.0.0",
+    "structured-binary-file": "*",
+    "binary-parser-encoder": "*",
+    "lodash": "^4.17.21"
   },
   "xx_dependencies": {
     "@signalk/signalk-schema": "^1.6.0",
     "babel-loader": "^8.0.0",
-    "baconjs": "^1.0.0",
-    "fast-json-stringify": "^2.7.7",
-    "lodash": "^4.17.21",
-    "structured-binary-file": "^1.0.1"
+    "fast-json-stringify": "^2.7.7"
   },
   "repository": {
     "type": "git",
