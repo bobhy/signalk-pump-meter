@@ -6,12 +6,14 @@
   "license": "ISC",
   "main": "index.js",
   "dependencies": {
+    "signalk-plugin-base": "*"
+  },
+  "xx_dependencies": {
     "@signalk/signalk-schema": "^1.6.0",
     "babel-loader": "^8.0.0",
     "baconjs": "^1.0.0",
     "fast-json-stringify": "^2.7.7",
     "lodash": "^4.17.21",
-    "signalk-plugin-base": "^1.4.0",
     "structured-binary-file": "^1.0.1"
   },
   "repository": {
@@ -36,13 +38,14 @@
     "jasmine": "^3.8.0",
     "jasmine-browser-runner": "^0.6.0",
     "moment": "^2.0.0",
+    "node-gyp": "^8.4.1",
     "react": "^16.14.0",
     "react-dom": "^16.14.0",
     "react-table": "^6.11.5",
     "react-widgets": "^4.6.1",
     "react-widgets-moment": "^4.0.30",
     "react-widgets-simple-number": "^4.1.26",
-    "signalk-server": "^1.4",
+    "signalk-server": "*",
     "style-loader": "^1.3.0",
     "terser-webpack-plugin": "^2.2.1",
     "url-loader": "^2.0.0",
@@ -60,7 +63,7 @@
     "test_client": "jasmine-browser-runner runSpecs"
   },
   "engines": {
-    "node": ">= 12.0.0",
+    "node": ">= 14.0.0",
     "npm": ">= 7.0.0"
   }
 }
