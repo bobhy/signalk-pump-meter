@@ -9,7 +9,7 @@ function toSec(msValue) {   // convert MS to rounded # sec
     return Math.round(msValue / 1000.0)
 }
 
-/* allowed values of <reportPath>.status 
+/* allowed values of <reportPath>.status
  */
 
 const _device_status = {
@@ -30,7 +30,7 @@ class DeviceReadings {
 
     /**
      * Creates an instance of DeviceReadings.
-     * 
+     *
      * @memberof DeviceReadings
      */
     constructor() {
@@ -48,10 +48,10 @@ class DeviceReadings {
 
     /**
      * Construct a binary record parser for this object
-     * 
+     *
      * It's necessary to list all the fields a second time, but at least it's in the same class...
      *
-     * @return {Parser} 
+     * @return {Parser}
      * @memberof DeviceReadings
      */
     GetParser() {
@@ -102,7 +102,7 @@ class DeviceReadings {
 
     /**
      * Emit values for external consumption on the network
-     * 
+     *
      * Timestamps converted to relative elapsed time (and rounded to sec).
      * RunTime and LastRunTime adjusted for current run in progress if devce ON
      *
@@ -295,7 +295,7 @@ class DeviceHandler {
 
     getHistory(start, end) {
 
-        console.log(`${this.config.name} history request for ${start} thru ${end}`);
+        console.debug(`${this.config.name} history request for ${start} thru ${end}`);
         let startRange = this.parseDate(start, 0);
         let endRange = this.parseDate(end, new Date().getTime());
 
