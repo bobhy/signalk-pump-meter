@@ -45,7 +45,7 @@ class MockApp {
     }
 
     handleMessage(id, delta) {
-        // console.log(`\nSignalK from ${id}:\n${JSON.stringify(delta, null, 2)}\n`)
+        console.log(`\nSignalK from ${id}:\n${JSON.stringify(delta, null, 2)}\n`)
     }
 
     setProviderStatus(msg) {

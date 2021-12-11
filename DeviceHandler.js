@@ -212,7 +212,7 @@ class DeviceHandler {
 
         this.readings = new DeviceReadings();
         this.history = new SessionHistory(this.readings.GetParser(), `${this.skPlugin.dataDir}/${this.id}.dat`)
-        this.readings = this.history.ExtendSession(this.readings, config.secTimeout*1000)
+        this.readings = this.history.ExtendSession(this.readings, config.secTimeout * 1000)
 
         this.lastSKReport = 0;
         //debug this.reportSK();
@@ -304,7 +304,7 @@ class DeviceHandler {
 
         try {
             this.history.forEach(rec => {
-                if (startRange <= rec.lastSampleDate && endRange >= rec.sessionStartDate) {
+                if (startRange <= rec.sessionStartDate && endRange >= rec.sessionStartDate) { //todo improve granularity of history??
                     res.push({ historyDate: Date.now(), ...rec })
                 }
             })
