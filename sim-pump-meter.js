@@ -7,7 +7,7 @@ const MockApp = require('./mocks.js').MockApp;
 
     const pluginMonitorPath = "electrical.battery.253.current";
     const pluginStatsPath = "electrical.battery.252";
-    const pluginDeviceName = "pump_metxx";
+    const pluginDeviceName = "pumpmetxx";   //hardwon someone strips '_' from string names here
 
     const dataPath = "mockdir/signalk/data";
 
@@ -44,9 +44,9 @@ const MockApp = require('./mocks.js').MockApp;
 
         setTimeout(function() {
             clearInterval(simTimer);
-        }, 17000);
+        }, 20000);
 
-        setTimeout(endGenSim, 29000);
+        setTimeout(endGenSim, 22000);
     }
 
 
