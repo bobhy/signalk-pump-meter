@@ -57,10 +57,10 @@
   "scripts": {
     "do_inst": "rm -rf node_modules; npm install; ln -sf  ../../@signalk/ node_modules/signalk-server/node_modules/@signalk",
     "do_test_setup": "npm link; cd test/skserv/config; npm install ../../..",
-    "test": "cd test/skserv; ./skserv",
+    "e2etest": "cd test/skserv; ./skserv",
     "build": "NODE_ENV=production webpack --config webpack.prod.js",
     "dev": "NODE_ENV=development webpack --config webpack.dev.js",
-    "test_server": "jasmine",
+    "test": "jasmine",
     "test_client": "jasmine-browser-runner runSpecs"
   },
   "engines": {

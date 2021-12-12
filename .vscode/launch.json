@@ -5,6 +5,16 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Jasmine",
+            "request": "launch",
+            "program": "${workspaceRoot}/node_modules/.bin/jasmine",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "type": "pwa-node",
+            "console": "integratedTerminal"
+        },
+        {
             "name": "Launch sim-pump-meter",
             "program": "${workspaceFolder}/sim-pump-meter.js",
             "request": "launch",
@@ -13,20 +23,6 @@
             ],
             "type": "pwa-node"
         },
-        {
-            "name": "Launch via NPM",
-            "request": "launch",
-            "runtimeArgs": [
-                "run-script",
-                "debug"
-            ],
-            "runtimeExecutable": "npm",
-            "skipFiles": [
-                "<node_internals>/**"
-            ],
-            "type": "pwa-node"
-        },
-
         {
             "name": "Attach by Process ID",
             "processId": "${command:PickProcess}",
@@ -77,3 +73,4 @@
             ]
         }
     ]
+}
