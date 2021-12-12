@@ -233,8 +233,9 @@ class DeviceHandler {
      */
     onHeartbeat(timer) {
         //this.skPlugin.debug(`onHeartbeat(${JSON.stringify(timer)})`);
-        if (toSec(Date.now() - this.readings.lastSampleDate) > this.config.secTimeout) {
-            this.skPlugin.debug(`Device data timeout, marking ${this.config.name} as offline}`)
+        let secDiff = toSec(Date.now() - this.readings.lastSampleDate);
+        if (secDiff > this.config.secTimeout) {
+            this.skPlugin.debug(`Device data timeout (${secDiff} sec), marking ${this.config.name} as offline}`)
             this.readings.NewSample(0, Date.now())
             this.readings.status = _device_status.OFFLINE   // override NewSample logic
             this.reportSK();    // emit offline status

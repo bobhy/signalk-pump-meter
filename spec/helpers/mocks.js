@@ -34,6 +34,7 @@ class MockApp {
     constructor(dataDir) {
         this._dataDir = dataDir;
         this.streambundle = new MockStreambundle();
+        this.status = "constructed";
     }
 
     debug(output) {
@@ -48,11 +49,12 @@ class MockApp {
         console.log(`\nSignalK from ${id}:\n${JSON.stringify(delta, null, 2)}\n`)
     }
 
-    setProviderStatus(msg) {
-        console.log(`Plugin status: ${msg}`);
-    }
+    //setProviderStatus(msg) {
+    //    console.log(`Plugin status: ${msg}`);
+    //}
 
     setPluginStatus(msg) {
+        this.status = msg;
         console.log(`Plugin status: ${msg}`);
     }
 }

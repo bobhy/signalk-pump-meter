@@ -5,6 +5,10 @@ const MockApp = require('./mocks.js').MockApp;
 const tmp = require('tmp');
 tmp.setGracefulCleanup();   //todo how to make the tmp files disappear??
 
+function delay(time) {
+    return new Promise(resolve => setTimeout(resolve, time));
+}
+
 /**
  * Instantiate plugin so tests can feed results and capture responses
  *
@@ -39,22 +43,12 @@ class TestPlugin {
         };
 
         this.responses = [];
-        this.app.handleMessage = (id, delta) => this.responses.push(delta);  // hotwire handleMessage
+        this.app.handleMessage = (id, delta) => {   // must use closure here to get the right 'this'
+            this.responses.push(delta);  // hotwire handleMessage
+        };
         this.plugin.start(this.options);
     }
 
-
-    /**
-     * receive responses from plugin and buffer them for unit tests
-     *
-     * @param {*} id
-     * @param {*} delta
-     * @memberof TestPlugin
-     */
-     _receiveResponse(id, delta) {
-        console.debug(`... received from ${id}:\n${JSON.stringify(delta, null, 2)}\n`)
-        this.responses.push(delta);
-    }
 
     /**
      * feed a list of values to plugin, return any responses
@@ -63,7 +57,7 @@ class TestPlugin {
      * @returns {[{path:, value:}]} -- (possibly empty) list of objects.
      * @memberof TestPlugin
      */
-    feedValues(vals) {
+    sendTo(vals) {
         if (typeof (vals) != 'object') {
             vals = [vals]
         };
@@ -73,6 +67,15 @@ class TestPlugin {
         vals.forEach(val => {
             this.app.streambundle.pushMockValue(this.skMonitorPath, { value: val });
         });
+
+
+
+        return this.responses;
+    }
+
+    async getFrom() {
+
+        await delay(6000);  // must wait a response period
 
         return this.responses;
     }
