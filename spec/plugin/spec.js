@@ -66,10 +66,14 @@ describe("emits status periodically, even if nothing is changing",  function() {
         start = Date.now();
         r1 = await tp.getFrom();
         firstRsp = Date.now();
+        tp.sendTo(3);   //bugbug -- plugin should continue to emit status, even if source has timed out
         r2 = await tp.getFrom();
         secRsp = Date.now();
         expect(firstRsp - start).toBeGreaterThan(1000);
         expect(secRsp - firstRsp).toBeGreaterThan( (tp.options.devices[0].secReportInterval - 1)*1000);
+        expect(r1.length).toBeGreaterThanOrEqual(1);
+        expect(r2.length).toBeGreaterThanOrEqual(1);
+
         //bug r2 is empty!
     });
 

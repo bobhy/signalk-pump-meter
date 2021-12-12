@@ -62,8 +62,6 @@ class TestPlugin {
             vals = [vals]
         };
 
-        this.responses = [];    // forget about any previous responses...
-
         vals.forEach(val => {
             this.app.streambundle.pushMockValue(this.skMonitorPath, { value: val });
         });
@@ -75,9 +73,31 @@ class TestPlugin {
 
     async getFrom() {
 
-        await delay(6000);  // must wait a response period
+        while (this.responses.length == 0) {
+            console.debug('... waiting for a response from plugin...')
+            await delay(1000);  // must wait a response period
+        };
 
-        return this.responses;
+        expect(this.responses[0].updates).toBeDefined();
+        expect(this.responses[0].updates[0].values).toBeDefined();
+
+        var rv = [];
+
+        this.responses.forEach(r => {
+            r.updates.forEach(u => {
+                let vv = {};
+                u.values.forEach(pv => {
+                    const lastPos = pv.path.lastIndexOf('.');
+                    expect(pv.path.substring(0, lastPos)).toEqual(this.options.devices[0].skRunStatsPath);
+                    vv[pv.path.substring(lastPos + 1)] = pv.value
+                });
+                rv.push(vv);
+            });
+        })
+
+        this.responses = [];    // make room immediately to start collecting a new asynchronous response...
+
+        return new RevChron(rv);
     }
 
     /**
@@ -104,6 +124,41 @@ class TestPlugin {
     }
 }
 
+/**
+ * container for accessing array of results in reverse chonological order
+ *
+ * @class RevChron
+ */
+class RevChron {
+    constructor(arr_of_obj) {
+        this.data = arr_of_obj;
+        this.data_len = arr_of_obj.length;
+
+    }
+    /**
+     * get number of elements
+     *
+     * @readonly
+     * @memberof RevChron
+     */
+    get length() { return this.data.length; }
+    /**
+     * get newest element
+     *
+     * @readonly
+     * @memberof RevChron
+     */
+    get last() { return this.data[this.data_len - 1] }
+    /**
+     * get previous element
+     *
+     * @param {number} n -- reverse chronological index of element to fetch: 1 is 2nd newest, 2 is 3rd newest, etc.
+     * @return {object}
+     * @memberof RevChron
+     */
+    prev(n) { return this.data[this.data_len - 1 - n]; }
+}
+
 module.exports = {
-    TestPlugin
+    TestPlugin, RevChron
 };
