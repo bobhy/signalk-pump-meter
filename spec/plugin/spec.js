@@ -61,12 +61,11 @@ describe("lifecycle of TestPlugin", function () {
 
 describe("emits status periodically, even if nothing is changing",  function() {
     tp = new TestPlugin()
-    tp.sendTo(2);
     it("generates responses every polling interval period", async function(){
+        tp.sendTo(2);
         start = Date.now();
         r1 = await tp.getFrom();
         firstRsp = Date.now();
-        tp.sendTo(3);   //bugbug -- plugin should continue to emit status, even if source has timed out
         r2 = await tp.getFrom();
         secRsp = Date.now();
         expect(firstRsp - start).toBeGreaterThan(1000);

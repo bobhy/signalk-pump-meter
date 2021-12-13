@@ -38,7 +38,8 @@ class MockApp {
     }
 
     debug(output) {
-        console.log(output);
+        //todo define switch to enable verbose logging from mocks?
+        // console.debug(output);
     }
 
     getDataDirPath() {
@@ -46,16 +47,12 @@ class MockApp {
     }
 
     handleMessage(id, delta) { //todo capture this for unit test
-        console.log(`\nSignalK from ${id}:\n${JSON.stringify(delta, null, 2)}\n`)
+        this.debug(`\nSignalK from ${id}:\n${JSON.stringify(delta, null, 2)}\n`)
     }
-
-    //setProviderStatus(msg) {
-    //    console.log(`Plugin status: ${msg}`);
-    //}
 
     setPluginStatus(msg) {
         this.status = msg;
-        console.log(`Plugin status: ${msg}`);
+        this.debug(`Plugin status: ${msg}`);
     }
 }
 

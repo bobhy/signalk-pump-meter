@@ -269,6 +269,9 @@ class DeviceHandler {
         if (!_.isEmpty(values)) {
             this.skPlugin.sendSKValues(values);
         }
+        else {
+            this.app.debug('... suppressed trying to send an empty delta.')
+        }
 
         this.lastSKReport = Date.now();
     }
@@ -296,7 +299,7 @@ class DeviceHandler {
 
     getHistory(start, end) {
 
-        console.debug(`${this.config.name} history request for ${start} thru ${end}`);
+        this.app.debug(`${this.config.name} history request for ${start} thru ${end}`);
         let startRange = this.parseDate(start, 0);
         let endRange = this.parseDate(end, new Date().getTime());
 

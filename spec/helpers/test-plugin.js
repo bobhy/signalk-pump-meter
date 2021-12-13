@@ -73,11 +73,18 @@ class TestPlugin {
 
     async getFrom() {
 
+        const startWait = Date.now();
         while (this.responses.length == 0) {
-            console.debug('... waiting for a response from plugin...')
+            //bugbug doesn't fail the test case or print anything unless the throw below is also executed.
+            //bugbug expect(Date.now() - startWait).toBeLessThan(this.options.devices[0].secReportInterval*2*1000);
+            if ((Date.now() - startWait) >= this.options.devices[0].secReportInterval*2*1000) {
+                throw 'timed out waiting for a response from plugin'
+            }
+            //this.app.debug('... waiting for a response from plugin...')
             await delay(1000);  // must wait a response period
         };
 
+        expect(this.responses.length).toBeGreaterThan(0);
         expect(this.responses[0].updates).toBeDefined();
         expect(this.responses[0].updates[0].values).toBeDefined();
 
@@ -115,7 +122,7 @@ class TestPlugin {
                 h.lastSampleDate = new Date(h.lastSampleDate);
             });
         }
-        //console.debug(JSON.stringify(history, null, 2));
+        //this.app.debug(JSON.stringify(history, null, 2));
         return history;
     }
 
