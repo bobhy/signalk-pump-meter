@@ -59,24 +59,43 @@ describe("lifecycle of TestPlugin", function () {
     });
 });
 
-describe("emits status periodically, even if nothing is changing",  function() {
+describe("emits status periodically, even if nothing is changing", function () {
     tp = new TestPlugin()
-    it("generates responses every polling interval period", async function(){
+    it("generates responses every polling interval period", async function () {
         tp.sendTo(2);
         start = Date.now();
         r1 = await tp.getFrom();
         firstRsp = Date.now();
         r2 = await tp.getFrom();
         secRsp = Date.now();
-        expect(firstRsp - start).toBeGreaterThan(1000);
-        expect(secRsp - firstRsp).toBeGreaterThan( (tp.options.devices[0].secReportInterval - 1)*1000);
+        expect(firstRsp - start).toBeGreaterThan(1);
+        expect(secRsp - firstRsp).toBeGreaterThan((tp.options.devices[0].secReportInterval - 1) * 1000);
         expect(r1.length).toBeGreaterThanOrEqual(1);
+        expect(r1.cycleCount).toEqual(1);
+        expect(r1.runTimeMs).toBeLessThan(firstRsp - start); // pump ran, but for less than whole first interval?
         expect(r2.length).toBeGreaterThanOrEqual(1);
-
-        //bug r2 is empty!
+        expect(r2.cycleCount).toEqual(r1.cycleCount);       // no new cycle
+        expect(r2.runTimeMs - r1.runTimeMs).toBeLessThanOrEqual(secRsp - firstRsp);     // pump assumed to be in same (running) state till we hear otherwise (or timeout)
     });
+});
+
+describe("Details of emitted statistics", function () {
+    tp = new TestPlugin()
+    it("extends current cycle while receiving a run of truthy values", function () { });
+    it("terminates the current cycle when receiving a falsey value", function () { });
+    it("doesn't extend runTimeMs while receiving falsey values", function () { });
+    it("doesn't increment cycleCount till it sees an OFF to ON transition", function () { });
+    it("maintains lastRunDate and lastRunTimeMs until it starts a new cycle, then it updates them for the new cycle", function () { });
 
 
+    it("generates responses every polling interval period", async function () {
+        tp.sendTo(2);
+        start = Date.now();
+        r1 = await tp.getFrom();
+        firstRsp = Date.now();
+        r2 = await tp.getFrom();
+        secRsp = Date.now();
+    });
 });
 
 

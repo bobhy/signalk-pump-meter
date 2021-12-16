@@ -39,7 +39,7 @@ class DeviceReadings {
         this.runTimeMs = 0              // integer number of ms
         this.lastRunDate = 0            // # ms since last observed OFF->ON transition (a long time ago)
         this.lastRunTimeMs = 0          // duration of last observed ON time (only updated when ON->OFF is seen)
-        this.sessionStartDate = Date.now()   // timestamp of start of data recording session
+        this.historyStartDate = Date.now()   // timestamp of start of data recording history
         this.lastSample = 0             // last known sample value of the device
         this.lastSampleDate = Date.now()  // timestamp of last sample (ms since 1-jan-1970)
         this.status = _device_status.OFFLINE
@@ -57,7 +57,7 @@ class DeviceReadings {
     GetParser() {
         return Parser.start()
             .endianess("big")  // network byte order even on (littleendian) intel-alike processors.
-            .doublebe("sessionStartDate")  //puzzle why not int64?   date as ms since 1/1/70
+            .doublebe("historyStartDate")  //puzzle why not int64?   date as ms since 1/1/70
             .int32("cycleCount")
             .int32("runtimeMs")
             .doublebe("lastRunDate")
@@ -107,7 +107,7 @@ class DeviceReadings {
      * RunTime and LastRunTime adjusted for current run in progress if devce ON
      *
      * @param {number} nowMs - "current" time in caller's epoch
-     * @return {object} -- keys: cycleCount, runTime, lastRunStart, lastRunTime, sessionStart
+     * @return {object} -- keys: cycleCount, runTime, lastRunStart, lastRunTime, historyStart
      * @memberof DeviceReadings
      */
     ReportValues(nowMs) {
@@ -117,7 +117,7 @@ class DeviceReadings {
             , lastRunStart: toSec(nowMs - this.lastRunDate)    // maybe more useful to report *end* of last cycle?
             // time from end of last cycle to start of current tells me how fast my bilge is filling up?
             , lastRunTime: toSec(!this.lastSample ? this.lastRunTimeMs : (nowMs - this.lastRunDate))
-            , sessionStart: toSec(nowMs - this.sessionStartDate)
+            , historyStart: toSec(nowMs - this.historyStartDate)
             , status: this.status
         }
     }
@@ -143,21 +143,21 @@ class SessionHistory extends FixedRecordFile {
     }
 
     /**
-     * Extend the previous data session, if it is fresh enough; otherwise start a new session.
+     * Extend the previous data session from plugin history.
+     *
+     * This restores all statistics as last checkpointed in prior history.
+     * But how should we report the gap between end of last history and this startup?  Should user even care?
      *
      * @param {*} current_session -- default session values
-     * @param {number} [session_continue_ms=0] -- resume prior session if last reading is within this interval (ms)
      * @return {*} -- updated session values
      * @memberof SessionHistory
      */
-    ExtendSession(current_session, session_continue_ms = 0) {
+    ExtendSession(current_session) {
         try {
             this.open(this.file_name)
             if (this.recordCount() > 0) {
                 const prior_session = this.readRecord(this.recordCount() - 1)
-                if (Date.now() - prior_session.lastSampleDate < session_continue_ms) {
-                    Object.assign(current_session, prior_session)  // resume all values from old session
-                }
+                Object.assign(current_session, prior_session)  // resume all values from old session
             }
 
             // append a new session record in any case. (means might have 2 sessions with same start time...)
@@ -168,6 +168,7 @@ class SessionHistory extends FixedRecordFile {
             this.close()
         }
 
+        //todo should make user aware of gap between end of last history and start of this one.
         return current_session
     }
 
@@ -184,7 +185,7 @@ class SessionHistory extends FixedRecordFile {
             this.open(this.file_name)
             this.writeRecord(this.recordCount() - 1, session)
         } catch (e) {
-            console.error(`${e} checkpointing session values to history ${this.file_name}.`)
+            console.error(`${e} checkpointing current values to history ${this.file_name}.`)
         } finally {
             this.close()
         }
@@ -308,7 +309,7 @@ class DeviceHandler {
 
         try {
             this.history.forEach(rec => {
-                if (startRange <= rec.sessionStartDate && endRange >= rec.sessionStartDate) { //todo improve granularity of history??
+                if (startRange <= rec.historyStartDate && endRange >= rec.historyStartDate) { //todo improve granularity of history??
                     res.push({ historyDate: Date.now(), ...rec })
                 }
             })

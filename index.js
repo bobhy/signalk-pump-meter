@@ -9,6 +9,7 @@ class PumpMeterPlugin extends SignalKPlugin {
     super({ app, id: 'signalk-pump-meter', name: 'Pump Meter', description: 'Synthesizes pump runtime and cycle count from another SignalK value that indicates the device is running' });
 
     this.optObj({ propName: 'devices', title: 'Devices to monitor', isArray: true, itemTitle: 'Device' });
+    // the following properties apply to each device
     this.optStr({ propName: 'name', title: 'Pump name', longDescription: "User-assigned name for this device, must be unique.", required: true });
     this.optStr({
       propName: 'skMonitorPath', title: 'SignalK value that indicates pump is on', required: true
@@ -17,11 +18,12 @@ class PumpMeterPlugin extends SignalKPlugin {
     });
     this.optStr({
       propName: 'skRunStatsPath', title: 'SignalK path under which to report pump run data'
-      , longDescription: 'Plugin reports 5 statistics with this path as common prefix.  Leave blank to disable.'
-      , defaultVal: "electrical.batteries.254"
+      , longDescription: 'Common SignalK path prefix under which to report pump statistics.  Leave blank to report under device name configured above.'
+      , defaultVal: ""
     });
     this.optInt({ propName: 'secReportInterval', title: 'Run data reporting interval (secs)', defaultVal: 30, longDescription: 'Number of seconds between each report of pump run data' });
     this.optInt({ propName: 'secTimeout', title: 'Pump signal timeout (secs)', defaultVal: 300, longDescription: 'Declare the device off if no signal received for this interval.' });
+    // end of device properties
     this.optObjEnd();
 
     this.unsub = [];
@@ -42,6 +44,9 @@ class PumpMeterPlugin extends SignalKPlugin {
     for (var device of this.options.devices) {
       if (device.name && device.skMonitorPath) {
         this.debug(`Configuring device ${device.name}`);
+        if (device.skRunStatsPath === "") {
+          device.skRunStatsPath = device.name;
+        }
         let handler = new DeviceHandler(this, device);
         this.subscribeVal(this.evtHeartbeat, handler.onHeartbeat, handler);
         this.handlers.push(handler);
