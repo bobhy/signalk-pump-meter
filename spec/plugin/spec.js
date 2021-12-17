@@ -1,12 +1,14 @@
 // tests for pump meter api
 
-
 const { propTypes } = require("react-widgets/lib/Calendar");
 //const { PluginDriver } = require("../helpers/plugin-driver");
-const {TestPlugin} = require("../helpers/test-plugin");
+const { TestPlugin } = require("../helpers/test-plugin");
+
+const TIME_PREC = 1; // when comparing times, match to within 2 hundredths.  Jasmine *rounds* each value before comparing??!
 
 jasmine.DEFAULT_TIMEOUT_INTERVAL = 100000;
 
+/* debug specs not running sequentialy?
 var activeSpecCount = 0;
 beforeEach(() => {
     activeSpecCount += 1;
@@ -15,12 +17,13 @@ beforeEach(() => {
     }
 })
 
-afterEach(()=>{
+afterEach(() => {
     activeSpecCount -= 1;
     if (activeSpecCount != 0) {
         console.error(`after spec, expected 0, actual ${activeSpecCount}`);
     }
 })
+*/
 
 /*
 describe("pump meter devices api", function () {
@@ -87,13 +90,13 @@ describe("Steady state behavior when nothing is changing", function () {
         tp.sendTo(0);
         var prev_time = Date.now();
         var prev_rsp = await tp.getFrom();
-        const reportIntervalMs = 1000*tp.options.devices[0].secReportInterval;
+        const reportIntervalMs = 1000 * tp.options.devices[0].secReportInterval;
 
-        for (i=0; i < 5; i++) {
+        for (i = 0; i < 5; i++) {
             const cur_time = Date.now();
             const cur_rsp = await tp.getFrom();   // wait for next response
             //not quantifiable! expect(cur_time - prev_time).toBeGreaterThanOrEqual(reportIntervalMs);
-            expect(cur_time - prev_time).toBeLessThan(2*reportIntervalMs);
+            expect(cur_time - prev_time).toBeLessThan(2 * reportIntervalMs);
             expect(cur_rsp.length).toBeGreaterThanOrEqual(1);
             expect(cur_rsp.last.cycleCount).toEqual(prev_rsp.last.cycleCount);  // cycle counts and accumulated run times don't chanve
             expect(cur_rsp.last.runTime).toEqual(0);
@@ -108,10 +111,44 @@ describe("Steady state behavior when nothing is changing", function () {
 });
 
 describe("Details of emitted statistics", function () {
-    var tp = new TestPlugin()
-    it("extends current cycle while receiving a run of truthy values", function () { });
-    it("terminates the current cycle when receiving a falsey value", function () { });
-    it("doesn't extend runTimeMs while receiving falsey values", function () { });
+    var tp = new TestPlugin();
+    it("extends current cycle and tot run time while receiving a run of truthy values, doesn't extend last run time", async function () {
+        tp.sendTo(1);
+        var prev_rsp = await tp.getFrom();
+        var prev_time = Date.now();
+        for (var i = 0; i < 5; i++) {
+            tp.sendTo(i);
+            var cur_rsp = await tp.getFrom();
+            var cur_time = Date.now();
+            expect(cur_rsp.last.cycleCount).toEqual(prev_rsp.last.cycleCount);
+            expect(cur_rsp.last.runTime - prev_rsp.last.runTime).toBeCloseTo((cur_time - prev_time) / 1000, TIME_PREC);
+            expect(cur_rsp.last.lastRunTime).toEqual(prev_rsp.lastRunTime);
+            expect(cur_rsp.last.lastRunStart - prev_rsp.last.lastRunStart).toBeCloseTo((cur_time - prev_time) / 1000, TIME_PREC);
+
+            prev_rsp = cur_rsp;
+            prev_time = cur_time;
+        }
+    });
+
+    it("terminates the current cycle and doesn't extend runtime when receiving a falsey value, doesn't extend runtime ", async function () {
+        tp.sendTo(1);
+        var prev_rsp = await tp.getFrom();
+        var prev_time = Date.now();
+        for (var i = 0; i < 5; i++) {
+            tp.sendTo(i);
+            var cur_rsp = await tp.getFrom();
+            var cur_time = Date.now();
+            expect(cur_rsp.last.cycleCount).toEqual(prev_rsp.last.cycleCount);
+            expect(cur_rsp.last.runTime - prev_rsp.last.runTime).toBeCloseTo((cur_time - prev_time) / 1000, TIME_PREC);
+            expect(cur_rsp.last.lastRunTime).toEqual(prev_rsp.lastRunTime);
+            expect(cur_rsp.last.lastRunStart - prev_rsp.last.lastRunStart).toBeCloseTo((cur_time - prev_time) / 1000, TIME_PREC);
+
+            prev_rsp = cur_rsp;
+            prev_time = cur_time;
+        }
+    });
+
+
     it("doesn't increment cycleCount till it sees an OFF to ON transition", function () { });
     it("maintains lastRunDate and lastRunTimeMs until it starts a new cycle, then it updates them for the new cycle", function () { });
 

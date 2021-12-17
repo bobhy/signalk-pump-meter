@@ -1,6 +1,6 @@
 {
   "name": "signalk-pump-meter",
-  "version": "1.0.0",
+  "version": "0.2.0",
   "description": "Reports pump runtime and cycle count based on some other SignalK value that indicates the device is currently running",
   "author": "Bob Hyman",
   "license": "ISC",
