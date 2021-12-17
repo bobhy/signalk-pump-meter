@@ -37,7 +37,7 @@ class TestPlugin {
                     skRunStatsPath: this.skRunStatsPath,
                     secTimeout: 10,
                     offsetHours: 0,
-                    secReportInterval: 3
+                    secReportInterval: 2
                 }
             ]
         };

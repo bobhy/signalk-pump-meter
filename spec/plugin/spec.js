@@ -66,42 +66,39 @@ describe("lifecycle of PumpMeterPlugin", function () {
         expect(tp.options.devices[0].name).toEqual('testPluginName');
     });
 
-    it("can be started, communicated with and stopped OK", async function () {
+    it("can be started, communicated with, stopped and restarted OK", async function () {
         expect(tp.app.status).toEqual("Started");
         tp.sendTo(1);
         rsp = await tp.getFrom();
         expect(rsp).toBeTruthy();
         tp.plugin.stop();
-        expect(tp.app.status).toEqual("Stopped");   //bugbug this is the wrong place to track plugin status!
+        expect(tp.app.status).toEqual("Stopped");
+        await expectAsync(tp.getFrom()).toBeRejected();
+        tp.plugin.start(tp.options);
+        expect(tp.app.status).toEqual("Started");
+        rsp = await tp.getFrom();
+        expect(rsp.length).toBeGreaterThanOrEqual(1);
     });
 });
 
 describe("Steady state behavior when nothing is changing", function () {
-    var tp;
-    beforeAll(function(){
-        tp = new TestPlugin();
-    });
-    afterAll(function(){
-
-    });
-
+    var tp = new TestPlugin();
     it("generates responses every polling interval period", async function () {
-        tp.sendTo(2);
+        tp.sendTo(0);
         var prev_time = Date.now();
         var prev_rsp = await tp.getFrom();
         const reportIntervalMs = 1000*tp.options.devices[0].secReportInterval;
 
-        for (i=0; i < 10; i++) {
+        for (i=0; i < 5; i++) {
             const cur_time = Date.now();
             const cur_rsp = await tp.getFrom();   // wait for next response
-//fixme test assuming the runtime clock keeps runnig till a 0 sample
-            //expect(cur_time - prev_time).toBeGreaterThanOrEqual(reportIntervalMs);
+            //not quantifiable! expect(cur_time - prev_time).toBeGreaterThanOrEqual(reportIntervalMs);
             expect(cur_time - prev_time).toBeLessThan(2*reportIntervalMs);
-            expect(cur_rsp.length).toEqual(1);
+            expect(cur_rsp.length).toBeGreaterThanOrEqual(1);
             expect(cur_rsp.last.cycleCount).toEqual(prev_rsp.last.cycleCount);  // cycle counts and accumulated run times don't chanve
-            //expect(cur_rsp.last.runTime).toEqual(prev_rsp.last.runTime);
-            //expect(cur_rsp.last.lastRunTime).toEqual(prev_rsp.last.lastRunTime);
-            //expect(cur_rsp.last.lastRunStart - prev_rsp.last.lastRunStart).toEqual(reportIntervalMs); // but when it last ran is receeding into the past.
+            expect(cur_rsp.last.runTime).toEqual(0);
+            expect(cur_rsp.last.lastRunTime).toEqual(prev_rsp.last.lastRunTime);
+            // right after start, not stable value?expect(cur_rsp.last.lastRunStart - prev_rsp.last.lastRunStart).toEqual(reportIntervalMs); // but when it last ran is receeding into the past.
 
             prev_time = cur_time;
             prev_rsp = cur_rsp;
