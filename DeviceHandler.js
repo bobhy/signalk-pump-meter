@@ -234,14 +234,16 @@ class DeviceHandler {
      */
     onHeartbeat(timer) {
         //this.skPlugin.debug(`onHeartbeat(${JSON.stringify(timer)})`);
-        let secDiff = toSec(Date.now() - this.readings.lastSampleDate);
+        //fixme <timer> is a valid date/time, but does it match timestamp if data is played back from file?
+        const secDiff = toSec(Date.now() - this.readings.lastSampleDate);
         if (secDiff > this.config.secTimeout) {
             this.skPlugin.debug(`Device data timeout (${secDiff} sec), marking ${this.config.name} as offline}`)
             this.readings.NewSample(0, Date.now())
             this.readings.status = _device_status.OFFLINE   // override NewSample logic
             this.reportSK();    // emit offline status
         }
-        if (toSec(Date.now() - this.lastSKReport) >= this.config.secReportInterval) {
+        const repDiff = toSec(Date.now() - this.lastSKReport);
+        if (repDiff >= this.config.secReportInterval) {
             this.reportSK();
             this.history.CheckpointValues(this.readings)
         }

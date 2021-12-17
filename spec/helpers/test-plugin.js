@@ -27,7 +27,7 @@ class TestPlugin {
     constructor() {
         this.dataPath = tmp.dirSync().name;       // create temp directory and return name
         this.app = new MockApp(this.dataPath);
-        this.debug = this.app.debug;            //puzzle why do I have to hoist this when I didn't in sim-pump-meter?
+        //this.debug = this.app.debug;            //puzzle why do I have to hoist this when I didn't in sim-pump-meter?
         this.plugin = new Plugin(this.app);
         this.options = {
             devices: [
@@ -46,7 +46,8 @@ class TestPlugin {
         this.app.handleMessage = (id, delta) => {   // must use closure here to get the right 'this'
             this.responses.push(delta);  // hotwire handleMessage
         };
-        this.plugin.start(this.options);
+        this.plugin.start(this.options);    //fixme this overrides the options defined in the UOT plugin!
+                                            // but apparently in signalk-server, options are cons'ed sometime after constructor is run.
     }
 
 
@@ -54,7 +55,6 @@ class TestPlugin {
      * feed a list of values to plugin, return any responses
      *
      * @param {*} vals -- list of values to feed the plugin, one at a time
-     * @returns {[{path:, value:}]} -- (possibly empty) list of objects.
      * @memberof TestPlugin
      */
     sendTo(vals) {
@@ -65,10 +65,6 @@ class TestPlugin {
         vals.forEach(val => {
             this.app.streambundle.pushMockValue(this.skMonitorPath, { value: val });
         });
-
-
-
-        return this.responses;
     }
 
     async getFrom() {
@@ -77,11 +73,11 @@ class TestPlugin {
         while (this.responses.length == 0) {
             //bugbug doesn't fail the test case or print anything unless the throw below is also executed.
             //bugbug expect(Date.now() - startWait).toBeLessThan(this.options.devices[0].secReportInterval*2*1000);
-            if ((Date.now() - startWait) >= this.options.devices[0].secReportInterval*2*1000) {
+            if ((Date.now() - startWait) >= this.options.devices[0].secReportInterval*3*1000) {
                 throw 'timed out waiting for a response from plugin'
             }
             //this.app.debug('... waiting for a response from plugin...')
-            await delay(1000);  // must wait a response period
+            await delay(500);  // must wait a response period
         };
 
         expect(this.responses.length).toBeGreaterThan(0);
@@ -113,7 +109,7 @@ class TestPlugin {
      * @memberof TestPlugin
      */
     getHistory() {
-        var history = this.plugin.getHandler(this.pluginDeviceName).getHistory();
+        var history = this.plugin.getHandler(this.pluginDeviceName).getHistory();   //bugbug -- this.pluginDeviceName same for all devices!
         if (!!history) {
             history.forEach(h => {
                 h.historyDate = new Date(h.historyDate);

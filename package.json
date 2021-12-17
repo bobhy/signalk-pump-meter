@@ -9,6 +9,7 @@
     "baconjs": "^1.0.0",
     "binary-parser-encoder": "*",
     "lodash": "^4.17.21",
+    "path": "^0.12.7",
     "signalk-plugin-base": "*",
     "structured-binary-file": "*"
   },
@@ -31,6 +32,7 @@
     "css-loader": "^3.2.0",
     "file-loader": "^4.3.0",
     "frisby": "^2.1.3",
+    "fs": "^0.0.1-security",
     "jasmine": "^3.8.0",
     "jasmine-browser-runner": "^0.6.0",
     "jasmine-console-reporter": "^3.1.0",
@@ -56,8 +58,8 @@
     "e2etest": "cd test/skserv; ./skserv",
     "build": "NODE_ENV=production webpack --config webpack.prod.js",
     "dev": "NODE_ENV=development webpack --config webpack.dev.js",
-    "test": "nvm use && jasmine",
-    "test_client": "nvm use && jasmine-browser-runner runSpecs"
+    "test": "jasmine",
+    "test_client": "jasmine-browser-runner runSpecs"
   },
   "engines": {
     "node": ">= 14.0.0",

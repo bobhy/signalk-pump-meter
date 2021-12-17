@@ -1,9 +1,26 @@
 // tests for pump meter api
 
-jasmine.DEFAULT_TIMEOUT_INTERVAL = 100000;
 
 const { propTypes } = require("react-widgets/lib/Calendar");
-const { TestPlugin } = require("../helpers/test-plugin");
+//const { PluginDriver } = require("../helpers/plugin-driver");
+const {TestPlugin} = require("../helpers/test-plugin");
+
+jasmine.DEFAULT_TIMEOUT_INTERVAL = 100000;
+
+var activeSpecCount = 0;
+beforeEach(() => {
+    activeSpecCount += 1;
+    if (activeSpecCount != 1) {
+        console.error(`before spec, expected counter 1, actual ${activeSpecCount}`);
+    }
+})
+
+afterEach(()=>{
+    activeSpecCount -= 1;
+    if (activeSpecCount != 0) {
+        console.error(`after spec, expected 0, actual ${activeSpecCount}`);
+    }
+})
 
 /*
 describe("pump meter devices api", function () {
@@ -39,8 +56,8 @@ describe("pump meter history api", function () {
 }
 )
 */
-describe("lifecycle of TestPlugin", function () {
-    tp = new TestPlugin();
+describe("lifecycle of PumpMeterPlugin", function () {
+    var tp = new TestPlugin();
 
     it("can be instantiated", function () {
         expect(tp).toBeTruthy();
@@ -59,28 +76,42 @@ describe("lifecycle of TestPlugin", function () {
     });
 });
 
-describe("emits status periodically, even if nothing is changing", function () {
-    tp = new TestPlugin()
+describe("Steady state behavior when nothing is changing", function () {
+    var tp;
+    beforeAll(function(){
+        tp = new TestPlugin();
+    });
+    afterAll(function(){
+
+    });
+
     it("generates responses every polling interval period", async function () {
         tp.sendTo(2);
-        start = Date.now();
-        r1 = await tp.getFrom();
-        firstRsp = Date.now();
-        r2 = await tp.getFrom();
-        secRsp = Date.now();
-        expect(firstRsp - start).toBeGreaterThan(1);
-        expect(secRsp - firstRsp).toBeGreaterThan((tp.options.devices[0].secReportInterval - 1) * 1000);
-        expect(r1.length).toBeGreaterThanOrEqual(1);
-        expect(r1.cycleCount).toEqual(1);
-        expect(r1.runTimeMs).toBeLessThan(firstRsp - start); // pump ran, but for less than whole first interval?
-        expect(r2.length).toBeGreaterThanOrEqual(1);
-        expect(r2.cycleCount).toEqual(r1.cycleCount);       // no new cycle
-        expect(r2.runTimeMs - r1.runTimeMs).toBeLessThanOrEqual(secRsp - firstRsp);     // pump assumed to be in same (running) state till we hear otherwise (or timeout)
+        var prev_time = Date.now();
+        var prev_rsp = await tp.getFrom();
+        const reportIntervalMs = 1000*tp.options.devices[0].secReportInterval;
+
+        for (i=0; i < 10; i++) {
+            const cur_time = Date.now();
+            const cur_rsp = await tp.getFrom();   // wait for next response
+//fixme test assuming the runtime clock keeps runnig till a 0 sample
+            //expect(cur_time - prev_time).toBeGreaterThanOrEqual(reportIntervalMs);
+            expect(cur_time - prev_time).toBeLessThan(2*reportIntervalMs);
+            expect(cur_rsp.length).toEqual(1);
+            expect(cur_rsp.last.cycleCount).toEqual(prev_rsp.last.cycleCount);  // cycle counts and accumulated run times don't chanve
+            //expect(cur_rsp.last.runTime).toEqual(prev_rsp.last.runTime);
+            //expect(cur_rsp.last.lastRunTime).toEqual(prev_rsp.last.lastRunTime);
+            //expect(cur_rsp.last.lastRunStart - prev_rsp.last.lastRunStart).toEqual(reportIntervalMs); // but when it last ran is receeding into the past.
+
+            prev_time = cur_time;
+            prev_rsp = cur_rsp;
+
+        };
     });
 });
 
 describe("Details of emitted statistics", function () {
-    tp = new TestPlugin()
+    var tp = new TestPlugin()
     it("extends current cycle while receiving a run of truthy values", function () { });
     it("terminates the current cycle when receiving a falsey value", function () { });
     it("doesn't extend runTimeMs while receiving falsey values", function () { });
