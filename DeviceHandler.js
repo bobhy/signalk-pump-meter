@@ -1,3 +1,7 @@
+//todo -- integrate history into DeviceReadings as in-memory circular buffer and as 2nd file on disk
+//todo -- invoke Newreading SendSK as soon as new reading detected, but respect report timeout (for testability)
+
+
 const { round } = require('lodash');
 const _ = require('lodash');
 const FixedRecordFile = require("structured-binary-file").FixedRecordFile;
@@ -37,8 +41,9 @@ class DeviceReadings {
 
         this.cycleCount = 0             // number of OFF->ON transitions
         this.runTimeMs = 0              // integer number of ms
-        this.lastRunDate = 0            // # ms since last observed OFF->ON transition (a long time ago)
-        this.lastRunTimeMs = 0          // duration of last observed ON time (only updated when ON->OFF is seen)
+        this.curDate = 0                // date/time current cycle started, or 0 if none
+        this.lastDate = 0               // date/time of start of most recent complete cycle
+        this.lastRunTimeMs = 0          // duration of most recent complete cycle
         this.historyStartDate = Date.now()   // timestamp of start of data recording history
         this.lastSample = 0             // last known sample value of the device
         this.lastSampleDate = Date.now()  // timestamp of last sample (ms since 1-jan-1970)
@@ -57,11 +62,12 @@ class DeviceReadings {
     GetParser() {
         return Parser.start()
             .endianess("big")  // network byte order even on (littleendian) intel-alike processors.
-            .doublebe("historyStartDate")  //puzzle why not int64?   date as ms since 1/1/70
             .int32("cycleCount")
             .int32("runtimeMs")
-            .doublebe("lastRunDate")
+            .doublebe("curDate")
+            .doublebe("lastDate")
             .int32("lastRunTimeMs")
+            .doublebe("historyStartDate")  //puzzle why not int64?   date as ms since 1/1/70
             .int32("lastSample")        // real-world value coerced to boolean in history.
             .doublebe("lastSampleDate")
             .string("status", { length: 16, trim: true })     // value encoded by _device_status_encode()
@@ -71,7 +77,7 @@ class DeviceReadings {
     /**
      * Account for a new sample observation
      * If going from OFF to ON, start a new cycle.
-     * If going from ON to OFF, add accumulated runTime to total runTime
+     * If going from ON to OFF, mark current cycle completed, add accumulated runTime to total runTime,
      * Optimized so no calculations need to be done while the value is unchanged, only on the rising or falling edge.
      *
      * @param {*} sampleValue       - the observed value.  Any truthy value indicates device is ON.
@@ -84,21 +90,21 @@ class DeviceReadings {
     ) {
         if (!sampleValue != !this.lastSample) { // if value *has* changed from last sample
             if (!this.lastSample) {             // and last sample was OFF, so start a new ON cycle
-                this.status = _device_status.ON
-                this.lastRunDate = sampleDate   // 'last' cycle is the one starting now
-                this.lastRunTimeMs = 0
-                this.cycleCount += 1            // count cycles at start of cycle; i.e OFF->ON
+                this.status = _device_status.ON;
+                this.curDate = sampleDate;
             } else {                            // last sample was ON, so this is end of a run
                 this.status = _device_status.OFF
-                this.lastRunTimeMs = (sampleDate - this.lastRunDate)
-                this.runTimeMs += this.lastRunTimeMs    // add last run to accumulated run
+                this.lastRunTimeMs = sampleDate - this.curDate;   // this cycle is most recently completed cycle.
+                this.lastDate = this.curDate;
+                this.cycleCount++;                             // one more completed cycle
+                this.runTimeMs += sampleDate - this.curDate       // also add to total runtime
+                //todo also record new lastRunTime and .lastDate in history circular buffer
             }
         }                                       // if value unchanged, no calculations needed
 
         this.lastSampleDate = sampleDate        // time marches on...
         this.lastSample = !!sampleValue         // convert sample value of any type to its "truthy" value.
     }
-
 
     /**
      * Emit values for external consumption on the network
@@ -107,16 +113,17 @@ class DeviceReadings {
      * RunTime and LastRunTime adjusted for current run in progress if devce ON
      *
      * @param {number} nowMs - "current" time in caller's epoch
-     * @return {object} -- keys: cycleCount, runTime, lastRunStart, lastRunTime, historyStart
+     * @return {object} -- keys: cycleCount, runTime, lastCycleStart, lastRunTime, historyStart
      * @memberof DeviceReadings
      */
     ReportValues(nowMs) {
         return {
             cycleCount: this.cycleCount
-            , runTime: toSec(this.runTimeMs + (!this.lastSample ? 0 : (this.lastSampleDate - this.lastRunDate)))
-            , lastRunStart: toSec(nowMs - this.lastRunDate)    // maybe more useful to report *end* of last cycle?
-            // time from end of last cycle to start of current tells me how fast my bilge is filling up?
-            , lastRunTime: toSec(!this.lastSample ? this.lastRunTimeMs : (nowMs - this.lastRunDate))
+            , runTime: toSec(this.runTimeMs + (!this.curDate ? 0 : nowMs - this.curDate))
+            , lastCycleStart: toSec(nowMs - this.lastDate)    // maybe more useful to report *end* of last cycle?
+            , lastCycleRunTime: toSec(this.lastRunTimeMs)
+            , curCycleStart: this.curDate ? toSec(nowMs - this.curDate) : 0
+            , status: this.status
             , historyStart: toSec(nowMs - this.historyStartDate)
             , status: this.status
         }
@@ -137,7 +144,6 @@ class SessionHistory extends FixedRecordFile {
      * @memberof SessionHistory
      */
     constructor(parser, file_name) {
-
         super(parser)
         this.file_name = file_name
     }
@@ -232,20 +238,20 @@ class DeviceHandler {
      * @param {*} timer -- timer event
      * @memberof DeviceHandler
      */
-    onHeartbeat(timer) {
+    onHeartbeat(nowMs) {
         //this.skPlugin.debug(`onHeartbeat(${JSON.stringify(timer)})`);
         //fixme <timer> is a valid date/time, but does it match timestamp if data is played back from file?
-        const secDiff = toSec(Date.now() - this.readings.lastSampleDate);
+        const secDiff = toSec(nowMs - this.readings.lastSampleDate);
         if (secDiff > this.config.secTimeout) {
             this.skPlugin.debug(`Device data timeout (${secDiff} sec), marking ${this.config.name} as offline}`)
-            this.readings.NewSample(0, Date.now())
+            this.readings.NewSample(0, nowMs)
             this.readings.status = _device_status.OFFLINE   // override NewSample logic
             this.reportSK();    // emit offline status
         }
-        const repDiff = toSec(Date.now() - this.lastSKReport);
+        const repDiff = toSec(nowMs - this.lastSKReport);
         if (repDiff >= this.config.secReportInterval) {
-            this.reportSK();
-            this.history.CheckpointValues(this.readings)
+            this.reportSK(nowMs);
+            this.history.CheckpointValues(this.readings);
         }
     }
 
@@ -262,10 +268,10 @@ class DeviceHandler {
     }
 
 
-    reportSK() {
+    reportSK(nowMs) {
         var values = [];
 
-        for (const [k, v] of Object.entries(this.readings.ReportValues(Date.now()))) {   //ugly k,v iteration!
+        for (const [k, v] of Object.entries(this.readings.ReportValues(nowMs))) {   //ugly k,v iteration!
             values.push({ path: `${this.config.skRunStatsPath}.${k}`, value: v })
         }
 
@@ -276,7 +282,7 @@ class DeviceHandler {
             this.app.debug('... suppressed trying to send an empty delta.')
         }
 
-        this.lastSKReport = Date.now();
+        this.lastSKReport = nowMs;
     }
 
 

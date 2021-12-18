@@ -4,6 +4,10 @@ const Plugin = require('../../index.js');
 const MockApp = require('./mocks.js').MockApp;
 const tmp = require('tmp');
 tmp.setGracefulCleanup();   //todo how to make the tmp files disappear??
+//const jasmine = require('jasmine');
+
+
+//const mockClock = jasmine.clock().install();
 
 function delay(time) {
     return new Promise(resolve => setTimeout(resolve, time));
@@ -25,6 +29,7 @@ class TestPlugin {
     responses = [];
 
     constructor() {
+        //this.mockClock = mockClock; // a jasmine mock clock
         this.dataPath = tmp.dirSync().name;       // create temp directory and return name
         this.app = new MockApp(this.dataPath);
         //this.debug = this.app.debug;            //puzzle why do I have to hoist this when I didn't in sim-pump-meter?
@@ -77,6 +82,7 @@ class TestPlugin {
                 throw 'timed out waiting for a response from plugin'
             }
             //this.app.debug('... waiting for a response from plugin...')
+            //this.mockClock.tick(499);
             await delay(500);  // must wait a response period
         };
 

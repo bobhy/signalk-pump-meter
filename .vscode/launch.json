@@ -4,10 +4,22 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
+
         {
             "name": "Jasmine",
             "request": "launch",
             "program": "${workspaceRoot}/node_modules/.bin/jasmine",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "type": "pwa-node",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Jasmine this spec",
+            "request": "launch",
+            "program": "${workspaceRoot}/node_modules/.bin/jasmine",
+            "args": ["${file}"],
             "skipFiles": [
                 "<node_internals>/**"
             ],
@@ -71,6 +83,7 @@
                 "-s",
                 "n2k-batt2.json"
             ]
-        }
+        },
+
     ]
 }

@@ -74,6 +74,8 @@ describe("lifecycle of PumpMeterPlugin", function () {
         tp.sendTo(1);
         rsp = await tp.getFrom();
         expect(rsp).toBeTruthy();
+        expect(rsp.length).toBeGreaterThanOrEqual(1);
+        expect(rsp.last.cycleCount).toBeGreaterThanOrEqual(1);
         tp.plugin.stop();
         expect(tp.app.status).toEqual("Stopped");
         await expectAsync(tp.getFrom()).toBeRejected();
@@ -116,14 +118,15 @@ describe("Details of emitted statistics", function () {
         tp.sendTo(1);
         var prev_rsp = await tp.getFrom();
         var prev_time = Date.now();
-        for (var i = 0; i < 5; i++) {
+        for (var i = 1; i < 5; i++) {
             tp.sendTo(i);
             var cur_rsp = await tp.getFrom();
             var cur_time = Date.now();
             expect(cur_rsp.last.cycleCount).toEqual(prev_rsp.last.cycleCount);
             expect(cur_rsp.last.runTime - prev_rsp.last.runTime).toBeCloseTo((cur_time - prev_time) / 1000, TIME_PREC);
-            expect(cur_rsp.last.lastRunTime).toEqual(prev_rsp.lastRunTime);
-            expect(cur_rsp.last.lastRunStart - prev_rsp.last.lastRunStart).toBeCloseTo((cur_time - prev_time) / 1000, TIME_PREC);
+            expect(cur_rsp.last.curCycleStart - prev_rsp.last.curCycleStart).toBeCloseTo((cur_time - prev_time) / 1000, TIME_PREC);
+            expect(cur_rsp.last.lastCycleRunTime).toEqual(prev_rsp.last.lastCycleRunTime);
+            expect(cur_rsp.last.lastCycleStart - prev_rsp.last.lastCycleStart).toBeCloseTo((cur_time - prev_time) / 1000, TIME_PREC);
 
             prev_rsp = cur_rsp;
             prev_time = cur_time;
@@ -134,14 +137,14 @@ describe("Details of emitted statistics", function () {
         tp.sendTo(1);
         var prev_rsp = await tp.getFrom();
         var prev_time = Date.now();
-        for (var i = 0; i < 5; i++) {
-            tp.sendTo(i);
+        for (var i = 1; i < 5; i++) {
+            tp.sendTo(0);
             var cur_rsp = await tp.getFrom();
             var cur_time = Date.now();
-            expect(cur_rsp.last.cycleCount).toEqual(prev_rsp.last.cycleCount);
+            expect(cur_rsp.last.cycleCount).toEqual(prev_rsp.last.cycleCount+1);
             expect(cur_rsp.last.runTime - prev_rsp.last.runTime).toBeCloseTo((cur_time - prev_time) / 1000, TIME_PREC);
-            expect(cur_rsp.last.lastRunTime).toEqual(prev_rsp.lastRunTime);
-            expect(cur_rsp.last.lastRunStart - prev_rsp.last.lastRunStart).toBeCloseTo((cur_time - prev_time) / 1000, TIME_PREC);
+            expect(cur_rsp.last.lastCycleRunTime).toEqual(prev_rsp.lastCycleRunTime);
+            expect(cur_rsp.last.lastCycleStart - prev_rsp.last.lastCycleStart).toBeCloseTo((cur_time - prev_time) / 1000, TIME_PREC);
 
             prev_rsp = cur_rsp;
             prev_time = cur_time;
@@ -154,12 +157,6 @@ describe("Details of emitted statistics", function () {
 
 
     it("generates responses every polling interval period", async function () {
-        tp.sendTo(2);
-        start = Date.now();
-        r1 = await tp.getFrom();
-        firstRsp = Date.now();
-        r2 = await tp.getFrom();
-        secRsp = Date.now();
     });
 });
 
@@ -170,6 +167,3 @@ describe("emits and saves to history expected values - 1 cycle", function () {
 
 });
 
-describe("a variety of truthy values continue one 'cycle'.", function () { });
-
-describe("a variety of falsy values terminate a cycle", function () { });
