@@ -21,7 +21,7 @@ const { Parser } = require("binary-parser-encoder");
  *
  * @author Bob Hyman
  */
-module.exports = class PersistentCircularBuffer {
+module.exports = class PersistentCircularBuffer extends CircularBuffer {
 
 
     /**
@@ -32,7 +32,8 @@ module.exports = class PersistentCircularBuffer {
      * @param {*} filePath -- Where to persist the backing store.  This file is created if it doesn't exist, or opened (and checked for consistency) if already exists
      */
     constructor(capacity, elementParser, filePath) {
-        this.buffer = new CircularBuffer(capacity);
+        //this.buffer = new CircularBuffer(capacity);
+        super(capacity);
 
         this.elementParser = elementParser;
         this.filePath = filePath;
@@ -42,16 +43,18 @@ module.exports = class PersistentCircularBuffer {
 
     }
 
-    // defer to CircularBuffer for descriptive methods: capacity(), size().
-    // defer to CircularBuffer for read-only methods: toarray(), get()
-
+    // would like to simply extend CircularBuffer and
+    // defer to its implementation of read-only methods: capacity(), size(), toarray(), get(),
+    // but its implementation of pop() would invoke our override of deq()
+    //size(){ return this.buffer.size(); }
+    //capacity() { return this.buffer.capacity();}
 
     push(element) {
-        this.buffer.push(element);
+        super.push(element);
         try {
             this.file.appendRecord(element);
         } catch (e) {
-            this.buffer.pop();  // couldn't persist, remove from in-memory buffer.
+            super.pop();  // couldn't persist, remove from in-memory buffer.
             throw e;
         }
     }
@@ -81,8 +84,8 @@ module.exports = class PersistentCircularBuffer {
     test_consistency() {
 
         if (this.file === undefined) { return "backing file not open"; }
-        if (this.capacity != this.file.maxRecordCount) { return `capacity mismatch: file ${this.file.maxRecordCount}, mem ${this.capacity}` };
-        if (this.size != this.file.recordCount) { return `current size mismatch: file ${this.file.recordCount}, mem ${this.size}` };
+        if (this.capacity() != this.file.maxRecordCount) { return `capacity mismatch: file ${this.file.maxRecordCount}, mem ${this.capacity()}` };
+        if (this.size() != this.file.recordCount()) { return `current size mismatch: file ${this.file.recordCount()}, mem ${this.size()}` };
 
         const mem_array = this.toarray();
         var file_element = this.file.getFirst();

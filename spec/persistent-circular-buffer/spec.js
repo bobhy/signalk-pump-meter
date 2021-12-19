@@ -27,7 +27,7 @@ class TestElement {
      */
     constructor (element) {
         this.element = element;
-        this.parser = new Parser();
+        this.parser = new Parser.start();
 
         for (const [k, v] of Object.entries(element)) {
             switch (typeof(v)) {
@@ -42,7 +42,7 @@ class TestElement {
                     }
                     break;
                 case 'boolean':
-                    this.parser.bit1(k);
+                    this.parser.int8(k);        // bit1 apparently botches sizeOf()??
                     break;
                 default:
                     throw `can't create TestElement with member of type ${typeof(v)}.`
@@ -65,8 +65,13 @@ describe("Instantiations that work", function() {
         const pcb = new PersistentCircularBuffer(10, my_element.parser, filePath );
         expect(pcb).toBeTruthy();
         for (var i = 0; i<3; i++) {
-            pcb.push(my_element.element); //append same element 3 times
-        }
+            const te = {iii: i, fff: i, sss:"te", bbb:true};
+            pcb.push(te); //append same element 3 times
+        };
+        expect(pcb.capacity()).toEqual(10);
+        expect(pcb.size()).toEqual(3);
+        expect(pcb.toarray()).toEqual([{iii: 0, fff: 0, sss:"te", bbb:true},{iii: 1, fff: 1, sss:"te", bbb:true},{iii: 2, fff: 2, sss:"te", bbb:true}]);
+        expect(pcb.test_consistency()).toEqual("");
     });
     it("Works when backing file does not exist", ()=>{});
     it("Works when backing file exists with same schema",()=>{});
