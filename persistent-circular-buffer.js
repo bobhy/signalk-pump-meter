@@ -7,8 +7,11 @@ const { Parser } = require("binary-parser-encoder");
 /**
  * Like a @see CircularBuffer, but with a persistent backing file.
  * Supports only append modifications, implements only @see push().
+ *
  * Supports all read-only operations, including iteration.
+ *
  * Elements of the buffer must be fixed size.
+ *
  * Backing file tuned for use in small-ish embedded systems: store binary representation for compactness,
  * sync changes to disk as soon as possible to reduce data loss or corruption by the running system,
  * do small I/O operations for efficiency.
@@ -41,6 +44,11 @@ module.exports = class PersistentCircularBuffer extends CircularBuffer {
         this.file = new CircularFile(this.elementParser, capacity);
         this.file.open(this.filePath);
 
+        // load in-memory buffer with inital contents of backing file
+        //hardwon -- .getNext() returns *null* at end.  This is == undefined, but not === undefined.
+        for (var e = this.file.getFirst(); e != undefined; e = this.file.getNext()) {
+            super.push(e);
+        };
     }
 
     // would like to simply extend CircularBuffer and
@@ -49,6 +57,14 @@ module.exports = class PersistentCircularBuffer extends CircularBuffer {
     //size(){ return this.buffer.size(); }
     //capacity() { return this.buffer.capacity();}
 
+    /**
+     * Insert the logically "newest" element into the buffer.
+     *
+     * Doing this with push rather than enq() means @see toarray() returns oldest element at index 0 and newest element
+     * at index @see size() - 1.  This is deemed the "least suprising" order.
+     *
+     * @param {*} element
+     */
     push(element) {
         super.push(element);
         try {
@@ -75,6 +91,31 @@ module.exports = class PersistentCircularBuffer extends CircularBuffer {
         throw ("Not yet implemented");
     }
 
+    /**
+     * Close the file representing the backing
+     *
+     * Required by @see FixedRecordFile, but what happens if you don't close the file?
+     * If there's only one object instantiated for the file at any given time, it's hard to see how you get in trouble.
+     * @see FixedRecordFile uses synchronous writes in all cases, so it doesn't return control until OS says data was written to disk,
+     * and it checks that the correct # of bytes was written and throws if mismatch.
+     * A second object could be instantiated, load up current and consistent data and you'd still be fine.
+     * So, for example, if your application throws before it can close, and you restart the application, you'll be fine.
+     *
+     * However, you will definitely have trouble if you have 2 instances both trying to write, maybe on separate threads.
+     * If both instances read the current file, they might see, e.g that the next slot is #22.  insance 1 now appends  V1, consuming slot 22 and updating the
+     * header on disk to indicate that.  But Insance 2 isn't monitoring for header changes and still thinks it can use slot 22 for its own append, e.g of V2.
+     * So now the 2 objects disaggree on what the newest record is and neither saw any error.
+     * This object is definitely not thread- or multiprocessing-safe.
+     *
+     * You should at least try to close the file.
+     *
+     */
+    close() {
+        if (this.file) {
+            this.file.close();
+        }
+    }
+
 
     /**
      * Check internal consistency, return first error found.
@@ -90,8 +131,9 @@ module.exports = class PersistentCircularBuffer extends CircularBuffer {
         const mem_array = this.toarray();
         var file_element = this.file.getFirst();
         for (var i = 0; i < mem_array.size; i++) {
+            mem_element = this.get(i); // also check enumeration order
             if (mem_array[i] != file_element) {
-                return `element mismatch at index ${i}, file ${JSON.stringify(file_element)}, mem ${JSON.stringify(mem_array[i])}.`;
+                return `element mismatch at index ${i}, file ${JSON.stringify(file_element)}, from to ${JSON.stringify(mem_array[i])}.`;
             }
             file_element = this.file.getNext();
         }
