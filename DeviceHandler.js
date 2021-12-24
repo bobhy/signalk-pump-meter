@@ -4,13 +4,15 @@
 
 const { round } = require('lodash');
 const _ = require('lodash');
-const FixedRecordFile = require("structured-binary-file").FixedRecordFile;
-const Parser = require("binary-parser-encoder").Parser;
 
 // pump run statistics logged and reported periodically
 
 function toSec(msValue) {   // convert MS to rounded # sec
     return Math.round(msValue / 1000.0)
+}
+
+function dateToIntervalSec(msValue) {  // num sec before "now"
+    return Math.round(Date.now() - msValue, 1000.0);
 }
 
 /* allowed values of <reportPath>.status
@@ -39,38 +41,15 @@ class DeviceReadings {
      */
     constructor() {
 
-        this.cycleCount = 0             // number of OFF->ON transitions
-        this.runTimeMs = 0              // integer number of ms
-        this.curDate = 0                // date/time current cycle started, or 0 if none
-        this.lastDate = 0               // date/time of start of most recent complete cycle
-        this.lastRunTimeMs = 0          // duration of most recent complete cycle
-        this.historyStartDate = Date.now()   // timestamp of start of data recording history
-        this.lastSample = 0             // last known sample value of the device
-        this.lastSampleDate = Date.now()  // timestamp of last sample (ms since 1-jan-1970)
-        this.status = _device_status.OFFLINE
-    }
+        this.cycleCount = 0;                // number of OFF->ON transitions
+        this.runTimeMs = 0;                 // integer number of ms
+        this.historyStartDate = Date.now(); // timestamp of start of data recording history
+        this.status = _device_status.OFFLINE;
+        this.edgeDate = Date.now();                  // most recent edge transition
 
+        this.cycles = new CircularBuffer(1000); // history of completed cycles: {start: <date/time>, run: <sec>})
 
-    /**
-     * Construct a binary record parser for this object
-     *
-     * It's necessary to list all the fields a second time, but at least it's in the same class...
-     *
-     * @return {Parser}
-     * @memberof DeviceReadings
-     */
-    GetParser() {
-        return Parser.start()
-            .endianess("big")  // network byte order even on (littleendian) intel-alike processors.
-            .int32("cycleCount")
-            .int32("runtimeMs")
-            .doublebe("curDate")
-            .doublebe("lastDate")
-            .int32("lastRunTimeMs")
-            .doublebe("historyStartDate")  //puzzle why not int64?   date as ms since 1/1/70
-            .int32("lastSample")        // real-world value coerced to boolean in history.
-            .doublebe("lastSampleDate")
-            .string("status", { length: 16, trim: true })     // value encoded by _device_status_encode()
+        //todo: establish checkpoint schedule, save live data t ofile every N sec.
     }
 
 
@@ -86,117 +65,86 @@ class DeviceReadings {
      *                                the played-back data is shifted into the present time.
      * @memberof DeviceReadings
      */
-    NewSample(sampleValue, sampleDate        // timestamp of new value (might be read from log)
-    ) {
-        if (!sampleValue != !this.lastSample) { // if value *has* changed from last sample
-            if (!this.lastSample) {             // and last sample was OFF, so start a new ON cycle
-                this.status = _device_status.ON;
-                this.curDate = sampleDate;
-            } else {                            // last sample was ON, so this is end of a run
-                this.status = _device_status.OFF
-                this.lastRunTimeMs = sampleDate - this.curDate;   // this cycle is most recently completed cycle.
-                this.lastDate = this.curDate;
-                this.cycleCount++;                             // one more completed cycle
-                this.runTimeMs += sampleDate - this.curDate       // also add to total runtime
-                //todo also record new lastRunTime and .lastDate in history circular buffer
-            }
-        }                                       // if value unchanged, no calculations needed
+    updateFromSample(sampleValue, sampleDate) {       // timestamp of new value (might be read from log)
 
-        this.lastSampleDate = sampleDate        // time marches on...
-        this.lastSample = !!sampleValue         // convert sample value of any type to its "truthy" value.
+        const truthy_sampleValue = !!sampleValue;
+
+        if (truthy_sampleValue != this.lastSample) {
+            if (truthy_sampleValue) {
+                this.status = _device_status.ON;
+                this.edgeDate = sampleDate;
+            } else {
+                const curRunMs = sampleDate - this.edgeDate;
+                this.cycleCount += 1;
+                this.runTimeMs += curRunMs;
+                this.cycles.enq({           // append latest cycle to *end* of log...
+                    date: this.edgeDate,
+                    runSec: toSec(currunMs),
+                });
+                this.status = _device_status.OFF;
+                this.edgeDate = sampleDate;
+            }
+        }
     }
 
     /**
-     * Emit values for external consumption on the network
+     * Mark the device as OFFLINE
      *
-     * Timestamps converted to relative elapsed time (and rounded to sec).
-     * RunTime and LastRunTime adjusted for current run in progress if devce ON
+     * Usually due to no status report for "too" long.
      *
-     * @param {number} nowMs - "current" time in caller's epoch
-     * @return {object} -- keys: cycleCount, runTime, lastCycleStart, lastRunTime, historyStart
+     * @param {*} sampleDate
      * @memberof DeviceReadings
      */
-    ReportValues(nowMs) {
+    forceOffline(sampleDate) {
+        this.status = _device_status.OFFLINE;
+        this.edgeDate = sampleDate;
+    }
+
+
+    /**
+     * Construct values to report in next SignalK delta
+     *
+     * @return {{}} --  leaf names and values in SignalK units.
+     *                  The actual SignalK path reported is @see Plugin.options.skRunStatsPath prepended to leaf name.
+     * @memberof DeviceReadings
+     */
+    deltaValues() {
+        lastCycle = this.cycles.get(0);     // most recent completed cycle
         return {
-            cycleCount: this.cycleCount
-            , runTime: toSec(this.runTimeMs + (!this.curDate ? 0 : nowMs - this.curDate))
-            , lastCycleStart: toSec(nowMs - this.lastDate)    // maybe more useful to report *end* of last cycle?
-            , lastCycleRunTime: toSec(this.lastRunTimeMs)
-            , curCycleStart: this.curDate ? toSec(nowMs - this.curDate) : 0
-            , status: this.status
-            , historyStart: toSec(nowMs - this.historyStartDate)
-            , status: this.status
+            'status': this.status,
+            'statusStart': dateToIntervalSec(this.edgeDate),
+            'cycleCount': this.cycleCount,
+            'runTime': toSec(this.runTimeMs),
+            'historyStart': dateToIntervalSec(this.historyDate),
+            'lastCycleStart': dateToIntervalSec(lastCycle.date),
+            'lastCycleRunTime': lastCycle.runSec,
         }
+    }
+
+
+    /**
+     * Restore checkpointed data, if possible
+     *
+     * @param {*} filePath
+     * @memberof DeviceReadings
+     */
+    restore(filePath) {
+
+    }
+
+
+    /**
+     * Save current values to disk
+     *
+     * @param {*} filePath
+     * @memberof DeviceReadings
+     */
+    save(filePath) {
+
     }
 }
 
-/**
- * Maintain a persistent history of old sessions
- *
- * @class SessionHistory
- * @extends {FixedRecordFile}
- */
-class SessionHistory extends FixedRecordFile {
-    /**
-     * Creates an instance of SessionHistory.
-     * @param {Parser} parser -- binary file parser for an instance of {@link DeviceReadings}
-     * @param {String} file_name -- full path to file for storing history
-     * @memberof SessionHistory
-     */
-    constructor(parser, file_name) {
-        super(parser)
-        this.file_name = file_name
-    }
 
-    /**
-     * Extend the previous data session from plugin history.
-     *
-     * This restores all statistics as last checkpointed in prior history.
-     * But how should we report the gap between end of last history and this startup?  Should user even care?
-     *
-     * @param {*} current_session -- default session values
-     * @return {*} -- updated session values
-     * @memberof SessionHistory
-     */
-    ExtendSession(current_session) {
-        try {
-            this.open(this.file_name)
-            if (this.recordCount() > 0) {
-                const prior_session = this.readRecord(this.recordCount() - 1)
-                Object.assign(current_session, prior_session)  // resume all values from old session
-            }
-
-            // append a new session record in any case. (means might have 2 sessions with same start time...)
-            this.appendRecord(current_session)
-        } catch (e) {
-            console.error(`${e} starting new session from history ${this.file_name}`)
-        } finally {
-            this.close()
-        }
-
-        //todo should make user aware of gap between end of last history and start of this one.
-        return current_session
-    }
-
-
-    /**
-     * Update current session data in persistent file.
-     * Overwrite most recent record.
-     *
-     * @param {*} session
-     * @memberof SessionHistory
-     */
-    CheckpointValues(session) {
-        try {
-            this.open(this.file_name)
-            this.writeRecord(this.recordCount() - 1, session)
-        } catch (e) {
-            console.error(`${e} checkpointing current values to history ${this.file_name}.`)
-        } finally {
-            this.close()
-        }
-    }
-}
 
 /**
  * Handle a pump-style device (??)
@@ -218,17 +166,19 @@ class DeviceHandler {
         skPlugin.subscribeVal(this.skStream, this.onMonitorValue, this);
 
         this.readings = new DeviceReadings();
-        this.history = new SessionHistory(this.readings.GetParser(), `${this.skPlugin.dataDir}/${this.id}.dat`)
-        this.readings = this.history.ExtendSession(this.readings, config.secTimeout * 1000)
 
-        this.lastSKReport = 0;
+        this.readings.restore(this.historyPath);
+        this.historyPath = `${this.skPlugin.dataDir}/${this.id}.dat`;
+        this.lastSave = Date.now();
+
+        this.lastSKReport = Date.now();
         //debug this.reportSK();
     }
 
 
     stop() {
         this.skPlugin.debug(`Stopping ${this.config.name}`);
-        this.history.CheckpointValues(this.readings);
+        this.readings.save(this.historyPath);
     }
 
 
@@ -241,17 +191,18 @@ class DeviceHandler {
     onHeartbeat(nowMs) {
         //this.skPlugin.debug(`onHeartbeat(${JSON.stringify(timer)})`);
         //fixme <timer> is a valid date/time, but does it match timestamp if data is played back from file?
-        const secDiff = toSec(nowMs - this.readings.lastSampleDate);
-        if (secDiff > this.config.secTimeout) {
-            this.skPlugin.debug(`Device data timeout (${secDiff} sec), marking ${this.config.name} as offline}`)
-            this.readings.NewSample(0, nowMs)
-            this.readings.status = _device_status.OFFLINE   // override NewSample logic
-            this.reportSK();    // emit offline status
-        }
-        const repDiff = toSec(nowMs - this.lastSKReport);
-        if (repDiff >= this.config.secReportInterval) {
+
+        if (dateToIntervalSec(this.lastValueDate) >= this.config.secTimeout) {
+            this.readings.forceOffline(lastValueDate);
+        };
+
+        if (dateToIntervalSec(this.lastSKReportDate) >= this.config.secReportInterval) {
             this.reportSK(nowMs);
-            this.history.CheckpointValues(this.readings);
+        };
+
+        if (dateToIntervalSec(this.lastSave) > this.config.secCheckpoint) {
+            this.readings.save(this.historyPath);
+            this.lastSave = nowMs;
         }
     }
 
@@ -259,19 +210,30 @@ class DeviceHandler {
     /**
      * Invoked on receipt of a subscribed data value
      *
+     * Just record the last observation in this event,
+     * defer the edge detection and derived statistics calculation to
+     * the heartbeat event (where we can fully tune the resource consumption).
+     *
      * @param {*} val -- the value
      * @memberof DeviceHandler
      */
     onMonitorValue(val) {
         this.skPlugin.debug(`onMonitorValue(${JSON.stringify(val)})`);
-        this.readings.NewSample(val, Date.now());     //fixme timestamp should be from delta, not hard-coded
+        this.lastValueDate = Date.now();
+        this.readings.updateFromSample(val, Date.now());        // update readings and cyclecount history.
     }
 
 
+    /**
+     * Construct and send a SignalK delta with current statistics from this device.
+     *
+     * @param {*} nowMs
+     * @memberof DeviceHandler
+     */
     reportSK(nowMs) {
         var values = [];
 
-        for (const [k, v] of Object.entries(this.readings.ReportValues(nowMs))) {   //ugly k,v iteration!
+        for (const [k, v] of Object.entries(this.readings.toDelta())) {   //ugly k,v iteration!
             values.push({ path: `${this.config.skRunStatsPath}.${k}`, value: v })
         }
 
@@ -306,41 +268,49 @@ class DeviceHandler {
 
 
 
+    /**
+     * Get JSON values for a device history report
+     *
+     * @param {*} start
+     * @param {*} end
+     * @return {*}
+     * @memberof DeviceHandler
+     */
     getHistory(start, end) {
 
         this.app.debug(`${this.config.name} history request for ${start} thru ${end}`);
         let startRange = this.parseDate(start, 0);
-        let endRange = this.parseDate(end, new Date().getTime());
+        let endRange = this.parseDate(end, Date.now());
 
         let res = []
-        this.history.open(this.history.file_name)
 
-        try {
-            this.history.forEach(rec => {
-                if (startRange <= rec.historyStartDate && endRange >= rec.historyStartDate) { //todo improve granularity of history??
-                    res.push({ historyDate: Date.now(), ...rec })
-                }
-            })
-        }
-        catch (e) {
-            console.error(`${e} fetching session history from ${this.history.file_name}`)
-        }
-        finally {
-            this.history.close()
+        var i = 0;
+        hist = this.readings.cycles;
+
+        for (const [date, runSec] in hist.toarray()) {
+            if (date >= startRange) res.push({ date, runSec });
+            if (date > endRange) break;
         }
 
         return res
-
-        //        const cur_sess = this.readings.ReportValues(Date.now());
-        //const res = [{ historyDate: Date.now(), ...cur_sess }];   // array of 1 row
-        //return res;
     }
 
 
-    getDataFileName() {
-        return `${this.skPlugin.dataDir}/${this.id}.dat`;
-    }
+    /**
+     * Get histogram of results
+     *
+     * Intended to be an at-a-glance kind of history
+     * last 24h         cycles  aggregate_runTime
+     * last week        cycles/day  average_runTime_perDay (week starting 24h ago)
+     * last 2 months    cycles/day  average_runTime_perDay  (starting 8*24h ago)
+     *
+     * if the pump runs 1/day, each bucket would have ~~ 8x samples the previous, roughly logarithmic.
+     *
+     * @memberof DeviceHandler
+     */
+    getHistogram() {
 
+    }
 }
 
 module.exports = DeviceHandler;

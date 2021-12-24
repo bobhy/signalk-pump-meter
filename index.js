@@ -91,7 +91,7 @@ class PumpMeterPlugin extends SignalKPlugin {
         for (var handler of this.handlers) {
           jReturnVal.push(handler.id);
         }
-        this.debug(`Returning JSON value ${JSON.stringify(jReturnVal)}`)
+        this.debug(`api/devices: returning ${JSON.stringify(jReturnVal)}`)
         res.json(jReturnVal);
       }
       else {
@@ -104,7 +104,7 @@ class PumpMeterPlugin extends SignalKPlugin {
         var handler = this.getHandler(req.params.deviceId);
         if (handler != null) {
           let jReturnVal = handler.getHistory(req.query.start, req.query.end);
-          this.debug(`Returning JSON value ${JSON.stringify(jReturnVal)}`)
+          this.debug(`api/history/${deviceId}: returning ${JSON.stringify(jReturnVal)}`)
           res.json(jReturnVal);
         }
         else {
@@ -115,9 +115,7 @@ class PumpMeterPlugin extends SignalKPlugin {
         res.status(503).send('Plugin not running');
       }
     });
-
   }
-
 };
 
 
