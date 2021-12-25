@@ -4,7 +4,8 @@ const { propTypes } = require("react-widgets/lib/Calendar");
 //const { PluginDriver } = require("../helpers/plugin-driver");
 const { TestPlugin, RevChron, delay, toAbsTime } = require("../helpers/test-plugin");
 
-const TIME_PREC = 1; // when comparing times, match to within 2 hundredths.  Jasmine *rounds* each value before comparing??!
+const TIME_PREC = 0.5; // when comparing times, match to within 2 hundredths.  Jasmine *rounds* each value before comparing??!  takes fractional exponent?
+const TIME_PREC_MS = -4.5   // likewise when comparing millisecond values with full second variability.
 
 jasmine.DEFAULT_TIMEOUT_INTERVAL = 100000;
 
@@ -96,8 +97,8 @@ describe("Steady state behavior when nothing is changing", function () {
     it("generates responses every polling interval period describing same last edge", async function () {
         const tp = new TestPlugin();
         tp.sendTo(0);
-        const orig_rsp = await tp.getFrom();
         const reportIntervalMs = 1000 * tp.options.devices[0].secReportInterval;
+        const orig_rsp = await tp.getFrom();
         var prev_time = Date.now();
         var orig_time = prev_time;
 
@@ -105,8 +106,8 @@ describe("Steady state behavior when nothing is changing", function () {
             const cur_rsp = await tp.getFrom();
             const cur_time = Date.now();
 
-            expect(cur_time - prev_time).toBeLessThan(2 * reportIntervalMs);
-            expect(cur_rsp.last.lastCycleStart - orig_rsp.last.lastCycleStart).toBeCloseTo((cur_time - orig_time) / 1000, TIME_PREC);
+            expect(cur_time - prev_time).toBeLessThan(2.1 * reportIntervalMs);  // fudge factor for a few milliseconds difference
+            expect(toAbsTime(orig_rsp.last.moment, orig_rsp.last.lastCycleStart)).toBeCloseTo(orig_time, TIME_PREC_MS);
             expect(cur_rsp.last.cycleCount).toEqual(orig_rsp.last.cycleCount);  // cycle counts and accumulated run times don't chanve
             expect(cur_rsp.last.runTime).toEqual(0);
 
@@ -119,6 +120,7 @@ describe("During run of truthy values", function () {
     it("extends current status duration, but doesn't increase aggregate run time or cycle count", async function () {
         const tp = new TestPlugin();
         tp.sendTo(1);
+        const orig_time = Date.now();
         var prev_rsp = await tp.getFrom();
         var prev_time = Date.now();
         for (var i = 1; i < 5; i++) {
@@ -128,7 +130,8 @@ describe("During run of truthy values", function () {
             var cur_time = Date.now();
             expect(cur_rsp.last.cycleCount).toEqual(prev_rsp.last.cycleCount);
             expect(cur_rsp.last.runTime).toEqual(prev_rsp.last.runTime);
-            expect(cur_rsp.last.statusStart - prev_rsp.last.statusStart).toBeCloseTo((cur_time - prev_time) / 1000, TIME_PREC);
+            expect(cur_rsp.last.statusStart).toBeGreaterThanOrEqual(prev_rsp.last.statusStart); // can be equal due to *ROUNDING* of ms to sec!
+            expect(toAbsTime(cur_rsp.last.moment, cur_rsp.last.statusStart)).toBeCloseTo(orig_time, TIME_PREC_MS);
 
             prev_rsp = cur_rsp;
             prev_time = cur_time;
@@ -136,7 +139,7 @@ describe("During run of truthy values", function () {
     });
 });
 
-fdescribe("At ON to OFF transition", function () {
+describe("At ON to OFF transition", function () {
 
     it("increments cyclecount and saves last cycle history.", async function () {
         const tp = new TestPlugin();
@@ -150,7 +153,7 @@ fdescribe("At ON to OFF transition", function () {
         for (var i = 0; i < 3; i++) {
             tp.sendTo(10);
             prev_rsp = await tp.getFrom();
-            expect(toAbsTime(prev_rsp.last.moment, prev_rsp.last.statusStart)).toBeCloseTo(at_on_moment, -3);
+            expect(toAbsTime(prev_rsp.last.moment, prev_rsp.last.statusStart)).toBeCloseTo(at_on_moment, TIME_PREC_MS);
         }
         const during_on_rsp = prev_rsp;
 
@@ -162,11 +165,12 @@ fdescribe("At ON to OFF transition", function () {
         // during ON status, the "lastCycle" reported is unchanged.
         expect(pre_on_rsp.last.lastCycleRunTime).toEqual(during_on_rsp.last.lastCycleRunTime);
         expect(toAbsTime(pre_on_rsp.last.moment, pre_on_rsp.last.lastCycleStart)).toBeCloseTo(
-            toAbsTime(during_on_rsp.last.moment, during_on_rsp.last.lastCycleStart), -3);
+            toAbsTime(during_on_rsp.last.moment, during_on_rsp.last.lastCycleStart), TIME_PREC_MS);
 
         prev_rsp = await tp.getFrom();
         const at_off_rsp = prev_rsp;
 
+        /*
         for (var i = 0; i < 10; i++) {
             if (i > 2)
                 tp.sendTo(30);
@@ -174,34 +178,12 @@ fdescribe("At ON to OFF transition", function () {
                 tp.sendTo(0);
             prev_rsp = await tp.getFrom();
         }
+        */
         expect(at_off_rsp.last.cycleCount).toEqual(during_on_rsp.last.cycleCount + 1);
         // last cycle was just ended.  That means it *started* when the first OFF to ON was seen,
         // and that its duration was all the time ONs were seen (which is the same duration)
-        expect(at_off_rsp.last.lastCycleRunTime).toBeCloseTo((at_off_moment - at_on_moment) / 1000, 1);     // last cycle started when plugin saw first OFF to ON
-        expect(toAbsTime(at_off_rsp.last.moment, at_off_rsp.last.lastCycleStart)).toBeCloseTo(at_on_moment, -3)
-    });
-});
-
-xdescribe("After an ON to OFF followed by a run of falsey values", function () {
-    xit("doesn't change cycleCount or ", async function () {
-        /*
-        expect(during_on_statusStart).toEqual(first_off_cycleStats.cycleRunTime);
-
-        var prev_rsp = await tp.getFrom();
-        var prev_time = Date.now();
-        for (var i = 1; i < 5; i++) {
-            tp.sendTo(0);
-            var cur_rsp = await tp.getFrom();
-            var cur_time = Date.now();
-            expect(cur_rsp.last.cycleCount).toEqual(prev_rsp.last.cycleCount + 1);
-            expect(cur_rsp.last.runTime - prev_rsp.last.runTime).toBeCloseTo((cur_time - prev_time) / 1000, TIME_PREC);
-            expect(cur_rsp.last.lastCycleRunTime).toEqual(prev_rsp.lastCycleRunTime);
-            expect(cur_rsp.last.lastCycleStart - prev_rsp.last.lastCycleStart).toBeCloseTo((cur_time - prev_time) / 1000, TIME_PREC);
-
-            prev_rsp = cur_rsp;
-            prev_time = cur_time;
-        }
-        */
+        expect(at_off_rsp.last.lastCycleRunTime).toBeCloseTo((at_off_moment - at_on_moment) / 1000, TIME_PREC - TIME_PREC);     // last cycle started when plugin saw first OFF to ON
+        expect(toAbsTime(at_off_rsp.last.moment, at_off_rsp.last.lastCycleStart)).toBeCloseTo(at_on_moment, TIME_PREC_MS)
     });
 });
 

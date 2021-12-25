@@ -28,6 +28,7 @@ class PumpMeterPlugin extends SignalKPlugin {
 
     this.unsub = [];
     this.handlers = [];
+    this.heartbeatMs = 2000;    // externally configurable for testability
   }
 
 
@@ -36,8 +37,7 @@ class PumpMeterPlugin extends SignalKPlugin {
 
     this.pluginStarted = Date.now();
 
-    var heartbeatInterval = 2000;
-    this.evtHeartbeat = Bacon.fromPoll(heartbeatInterval, () => { return Date.now() });
+    this.evtHeartbeat = Bacon.fromPoll(this.heartbeatMs, () => { return Date.now() });
 
     this.handlers = [];
 

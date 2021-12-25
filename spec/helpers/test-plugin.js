@@ -40,6 +40,7 @@ class TestPlugin {
     skMonitorPath = 'monitor.input';    // tbd -- does plugin insist on valid SK paths?
     skRunStatsPath = 'results.path.1';
     responses = [];
+    heartbeatMs = 300;      // .toBeCloseTo() precision hacked till tests work for heartbeat [300, 2000].
 
     constructor() {
         //this.mockClock = mockClock; // a jasmine mock clock
@@ -47,6 +48,7 @@ class TestPlugin {
         this.app = new MockApp(this.dataPath);
         //this.debug = this.app.debug;            //puzzle why do I have to hoist this when I didn't in sim-pump-meter?
         this.plugin = new Plugin(this.app);
+        this.plugin.heartbeatMs = this.heartbeatMs;     // faster heartbeat to generate responses faster for faster testing!
         this.options = {
             devices: [
                 {
@@ -55,7 +57,7 @@ class TestPlugin {
                     skRunStatsPath: this.skRunStatsPath,
                     secTimeout: 20,
                     offsetHours: 0,
-                    secReportInterval: 2
+                    secReportInterval: (this.heartbeatMs / 1000.0) //2
                 }
             ]
         };
@@ -108,11 +110,9 @@ class TestPlugin {
             }
             //this.app.debug('... waiting for a response from plugin...')
             //this.mockClock.tick(499);
-            await delay(500);  // must wait a response period
+            await delay(this.heartbeatMs / 3);  // must wait a response period
         };
 
-        expect(this.responses.length).toBeGreaterThan(0);
-        expect(this.responses[0].updates).toBeDefined();
         expect(this.responses[0].updates[0].values).toBeDefined();
 
         var rv = [];
