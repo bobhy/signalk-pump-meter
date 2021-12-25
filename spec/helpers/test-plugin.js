@@ -173,5 +173,5 @@ class RevChron {
 }
 
 module.exports = {
-    TestPlugin, RevChron
+    TestPlugin, RevChron, delay
 };

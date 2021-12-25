@@ -60,8 +60,30 @@ class DeviceReadings {
         this.edgeDate = Date.now();                  // most recent edge transition
 
         this.cycles = new CircularBuffer(1000); // history of completed cycles: {start: <date/time>, run: <sec>})
+        this.cycles.enq({date:Date.now(), runSec: 0});  // dummy first completed cycle
 
         //todo: establish checkpoint schedule, save live data t ofile every N sec.
+    }
+
+    /**
+     * Construct values to report in next SignalK delta
+     *
+     * @return {{}} --  leaf names and values in SignalK units.
+     *                  The actual SignalK path reported is @see Plugin.options.skRunStatsPath prepended to leaf name.
+     * @memberof DeviceReadings
+     */
+     deltaValues() {
+        const lastCycle = this.cycles.get(0);     // most recent completed cycle
+        const retVal = {
+            'status': this.status,
+            'statusStart': dateToIntervalSec(this.edgeDate),
+            'cycleCount': this.cycleCount,
+            'runTime': toSec(this.runTimeMs),
+            'historyStart': dateToIntervalSec(this.historyDate),
+            'lastCycleStart': dateToIntervalSec(lastCycle.date),
+            'lastCycleRunTime': lastCycle.runSec,
+        };
+        return retVal;
     }
 
 
@@ -109,28 +131,6 @@ class DeviceReadings {
     forceOffline(sampleDate) {
         this.status = _device_status.OFFLINE;
         this.edgeDate = sampleDate;
-    }
-
-
-    /**
-     * Construct values to report in next SignalK delta
-     *
-     * @return {{}} --  leaf names and values in SignalK units.
-     *                  The actual SignalK path reported is @see Plugin.options.skRunStatsPath prepended to leaf name.
-     * @memberof DeviceReadings
-     */
-    deltaValues() {
-        const lastCycle = this.cycles.get(0);     // most recent completed cycle
-        const retVal = {
-            'status': this.status,
-            'statusStart': dateToIntervalSec(this.edgeDate),
-            'cycleCount': this.cycleCount,
-            'runTime': toSec(this.runTimeMs),
-            'historyStart': dateToIntervalSec(this.historyDate),
-            'lastCycleStart': dateToIntervalSec(lastCycle.date),
-            'lastCycleRunTime': lastCycle.runSec,
-        };
-        return retVal;
     }
 
 

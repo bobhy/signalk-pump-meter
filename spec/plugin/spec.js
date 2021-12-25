@@ -2,7 +2,7 @@
 
 const { propTypes } = require("react-widgets/lib/Calendar");
 //const { PluginDriver } = require("../helpers/plugin-driver");
-const { TestPlugin } = require("../helpers/test-plugin");
+const { TestPlugin, RevChron, delay } = require("../helpers/test-plugin");
 
 const TIME_PREC = 1; // when comparing times, match to within 2 hundredths.  Jasmine *rounds* each value before comparing??!
 
@@ -60,10 +60,9 @@ describe("pump meter history api", function () {
 )
 */
 describe("lifecycle of PumpMeterPlugin", function () {
-    var tp = new TestPlugin();
-    var rsp = {};
 
-    it("can be instantiated", function () {
+    it("can be instantiated", async function () {
+        var tp = new TestPlugin();
         expect(tp).toBeTruthy();
         expect(tp.plugin).toBeTruthy();
         //expect(tp.responses).toEqual([]); //bugbug sometimes non-empty here!
@@ -71,39 +70,42 @@ describe("lifecycle of PumpMeterPlugin", function () {
     });
 
     it("can be started and starts emitting status", async function () {
+        var tp = new TestPlugin();
         expect(tp.app.status).toEqual("Started");
-        rsp = await tp.getFrom();
+        var rsp = await tp.getFrom();
         expect(rsp).toBeTruthy();
         expect(rsp.length).toBeGreaterThanOrEqual(1);
         expect(rsp.last.status).toEqual("OFFLINE");      //bug -- export pump status constants.
     });
 
     it("can be stopped and restarted and resumes emitting status", async function () {
+        var tp = new TestPlugin();
         tp.plugin.stop();
         expect(tp.app.status).toEqual("Stopped");
         await expectAsync(tp.getFrom()).toBeRejected();
         tp.plugin.start(tp.options);
         expect(tp.app.status).toEqual("Started");
-        rsp = await tp.getFrom();
+        var rsp = await tp.getFrom();
         expect(rsp.length).toBeGreaterThanOrEqual(1);
         expect(rsp.last.status).toEqual("OFFLINE");      //bug -- export pump status constants.
     });
 });
 
 describe("Steady state behavior when nothing is changing", function () {
-    var tp = new TestPlugin();
     it("generates responses every polling interval period describing same last edge", async function () {
+        var tp = new TestPlugin();
         tp.sendTo(0);
         const orig_rsp = await tp.getFrom();
         const reportIntervalMs = 1000 * tp.options.devices[0].secReportInterval;
         var prev_time = Date.now();
+        var orig_time = prev_time;
 
         for (var i = 0; i < 5; i++) {
             const cur_rsp = await tp.getFrom();
             const cur_time = Date.now();
 
             expect(cur_time - prev_time).toBeLessThan(2 * reportIntervalMs);
-            expect(cur_rsp.last.lastCycleStart - orig_rsp.last.lastCycleStart).toBeCloseTo(cur_time - prev_time, 1);
+            expect(cur_rsp.last.lastCycleStart - orig_rsp.last.lastCycleStart).toBeCloseTo((cur_time - orig_time) / 1000, 1);
             expect(cur_rsp.last.cycleCount).toEqual(orig_rsp.last.cycleCount);  // cycle counts and accumulated run times don't chanve
             expect(cur_rsp.last.runTime).toEqual(0);
 
@@ -113,8 +115,8 @@ describe("Steady state behavior when nothing is changing", function () {
 });
 
 xdescribe("Details of emitted statistics", function () {
-    //var tp = new TestPlugin();
     it("extends current cycle and tot run time while receiving a run of truthy values, doesn't extend last run time", async function () {
+        //var tp = new TestPlugin();
         tp.sendTo(1);
         var prev_rsp = await tp.getFrom();
         var prev_time = Date.now();
@@ -134,6 +136,7 @@ xdescribe("Details of emitted statistics", function () {
     });
 
     it("terminates the current cycle and doesn't extend runtime when receiving a falsey value, doesn't extend runtime ", async function () {
+        //var tp = new TestPlugin();
         tp.sendTo(1);
         var prev_rsp = await tp.getFrom();
         var prev_time = Date.now();
