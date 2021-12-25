@@ -2,7 +2,7 @@
 
 const { propTypes } = require("react-widgets/lib/Calendar");
 //const { PluginDriver } = require("../helpers/plugin-driver");
-const { TestPlugin, RevChron, delay } = require("../helpers/test-plugin");
+const { TestPlugin, RevChron, delay, toAbsTime } = require("../helpers/test-plugin");
 
 const TIME_PREC = 1; // when comparing times, match to within 2 hundredths.  Jasmine *rounds* each value before comparing??!
 
@@ -62,7 +62,7 @@ describe("pump meter history api", function () {
 describe("lifecycle of PumpMeterPlugin", function () {
 
     it("can be instantiated", async function () {
-        var tp = new TestPlugin();
+        const tp = new TestPlugin();
         expect(tp).toBeTruthy();
         expect(tp.plugin).toBeTruthy();
         //expect(tp.responses).toEqual([]); //bugbug sometimes non-empty here!
@@ -70,7 +70,7 @@ describe("lifecycle of PumpMeterPlugin", function () {
     });
 
     it("can be started and starts emitting status", async function () {
-        var tp = new TestPlugin();
+        const tp = new TestPlugin();
         expect(tp.app.status).toEqual("Started");
         var rsp = await tp.getFrom();
         expect(rsp).toBeTruthy();
@@ -79,7 +79,8 @@ describe("lifecycle of PumpMeterPlugin", function () {
     });
 
     it("can be stopped and restarted and resumes emitting status", async function () {
-        var tp = new TestPlugin();
+        const tp = new TestPlugin();
+        expect(tp.app.status).toEqual("Started");
         tp.plugin.stop();
         expect(tp.app.status).toEqual("Stopped");
         await expectAsync(tp.getFrom()).toBeRejected();
@@ -93,7 +94,7 @@ describe("lifecycle of PumpMeterPlugin", function () {
 
 describe("Steady state behavior when nothing is changing", function () {
     it("generates responses every polling interval period describing same last edge", async function () {
-        var tp = new TestPlugin();
+        const tp = new TestPlugin();
         tp.sendTo(0);
         const orig_rsp = await tp.getFrom();
         const reportIntervalMs = 1000 * tp.options.devices[0].secReportInterval;
@@ -105,7 +106,7 @@ describe("Steady state behavior when nothing is changing", function () {
             const cur_time = Date.now();
 
             expect(cur_time - prev_time).toBeLessThan(2 * reportIntervalMs);
-            expect(cur_rsp.last.lastCycleStart - orig_rsp.last.lastCycleStart).toBeCloseTo((cur_time - orig_time) / 1000, 1);
+            expect(cur_rsp.last.lastCycleStart - orig_rsp.last.lastCycleStart).toBeCloseTo((cur_time - orig_time) / 1000, TIME_PREC);
             expect(cur_rsp.last.cycleCount).toEqual(orig_rsp.last.cycleCount);  // cycle counts and accumulated run times don't chanve
             expect(cur_rsp.last.runTime).toEqual(0);
 
@@ -114,30 +115,78 @@ describe("Steady state behavior when nothing is changing", function () {
     });
 });
 
-xdescribe("Details of emitted statistics", function () {
-    it("extends current cycle and tot run time while receiving a run of truthy values, doesn't extend last run time", async function () {
-        //var tp = new TestPlugin();
+describe("During run of truthy values", function () {
+    it("extends current status duration, but doesn't increase aggregate run time or cycle count", async function () {
+        const tp = new TestPlugin();
         tp.sendTo(1);
         var prev_rsp = await tp.getFrom();
         var prev_time = Date.now();
         for (var i = 1; i < 5; i++) {
             tp.sendTo(i);
+            tp.sendTo(2);   // just to confirm it doesn't matter how many samples per heartbeat
             var cur_rsp = await tp.getFrom();
             var cur_time = Date.now();
             expect(cur_rsp.last.cycleCount).toEqual(prev_rsp.last.cycleCount);
-            expect(cur_rsp.last.runTime - prev_rsp.last.runTime).toBeCloseTo((cur_time - prev_time) / 1000, TIME_PREC);
-            expect(cur_rsp.last.curCycleStart - prev_rsp.last.curCycleStart).toBeCloseTo((cur_time - prev_time) / 1000, TIME_PREC);
-            expect(cur_rsp.last.lastCycleRunTime).toEqual(prev_rsp.last.lastCycleRunTime);
-            expect(cur_rsp.last.lastCycleStart - prev_rsp.last.lastCycleStart).toBeCloseTo((cur_time - prev_time) / 1000, TIME_PREC);
+            expect(cur_rsp.last.runTime).toEqual(prev_rsp.last.runTime);
+            expect(cur_rsp.last.statusStart - prev_rsp.last.statusStart).toBeCloseTo((cur_time - prev_time) / 1000, TIME_PREC);
 
             prev_rsp = cur_rsp;
             prev_time = cur_time;
         }
     });
+});
 
-    it("terminates the current cycle and doesn't extend runtime when receiving a falsey value, doesn't extend runtime ", async function () {
-        //var tp = new TestPlugin();
-        tp.sendTo(1);
+fdescribe("At ON to OFF transition", function () {
+
+    it("increments cyclecount and saves last cycle history.", async function () {
+        const tp = new TestPlugin();
+        var prev_rsp;
+
+        const pre_on_rsp = await tp.getFrom();
+
+        tp.sendTo(20);
+        const at_on_moment = Date.now();
+
+        for (var i = 0; i < 3; i++) {
+            tp.sendTo(10);
+            prev_rsp = await tp.getFrom();
+            expect(toAbsTime(prev_rsp.last.moment, prev_rsp.last.statusStart)).toBeCloseTo(at_on_moment, -3);
+        }
+        const during_on_rsp = prev_rsp;
+
+        // now terminate this duty cycle with a "0" sample.
+
+        tp.sendTo(0);       // terminate this duty cycle
+        const at_off_moment = Date.now();
+
+        // during ON status, the "lastCycle" reported is unchanged.
+        expect(pre_on_rsp.last.lastCycleRunTime).toEqual(during_on_rsp.last.lastCycleRunTime);
+        expect(toAbsTime(pre_on_rsp.last.moment, pre_on_rsp.last.lastCycleStart)).toBeCloseTo(
+            toAbsTime(during_on_rsp.last.moment, during_on_rsp.last.lastCycleStart), -3);
+
+        prev_rsp = await tp.getFrom();
+        const at_off_rsp = prev_rsp;
+
+        for (var i = 0; i < 10; i++) {
+            if (i > 2)
+                tp.sendTo(30);
+            else if (i > 6)
+                tp.sendTo(0);
+            prev_rsp = await tp.getFrom();
+        }
+        expect(at_off_rsp.last.cycleCount).toEqual(during_on_rsp.last.cycleCount + 1);
+        // last cycle was just ended.  That means it *started* when the first OFF to ON was seen,
+        // and that its duration was all the time ONs were seen (which is the same duration)
+        expect(at_off_rsp.last.lastCycleRunTime).toBeCloseTo((at_off_moment - at_on_moment) / 1000, 1);     // last cycle started when plugin saw first OFF to ON
+        expect(toAbsTime(at_off_rsp.last.moment, at_off_rsp.last.lastCycleStart)).toBeCloseTo(at_on_moment, -3)
+    });
+});
+
+xdescribe("After an ON to OFF followed by a run of falsey values", function () {
+    xit("doesn't change cycleCount or ", async function () {
+        /*
+        expect(during_on_statusStart).toEqual(first_off_cycleStats.cycleRunTime);
+
         var prev_rsp = await tp.getFrom();
         var prev_time = Date.now();
         for (var i = 1; i < 5; i++) {
@@ -152,14 +201,7 @@ xdescribe("Details of emitted statistics", function () {
             prev_rsp = cur_rsp;
             prev_time = cur_time;
         }
-    });
-
-
-    it("doesn't increment cycleCount till it sees an OFF to ON transition", function () { });
-    it("maintains lastRunDate and lastRunTimeMs until it starts a new cycle, then it updates them for the new cycle", function () { });
-
-
-    it("generates responses every polling interval period", async function () {
+        */
     });
 });
 

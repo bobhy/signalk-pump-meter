@@ -55,12 +55,13 @@ class DeviceReadings {
 
         this.cycleCount = 0;                // number of OFF->ON transitions
         this.runTimeMs = 0;                 // integer number of ms
-        this.historyDate = Date.now(); // timestamp of start of data recording history
+        this.historyDate = Date.now();      // timestamp of start of data recording history
+        this.lastSample = 0;                // last sample seen
         this.status = _device_status.OFFLINE;
         this.edgeDate = Date.now();                  // most recent edge transition
 
         this.cycles = new CircularBuffer(1000); // history of completed cycles: {start: <date/time>, run: <sec>})
-        this.cycles.enq({date:Date.now(), runSec: 0});  // dummy first completed cycle
+        this.cycles.enq({ date: Date.now(), runSec: 0 });  // dummy first completed cycle
 
         //todo: establish checkpoint schedule, save live data t ofile every N sec.
     }
@@ -72,7 +73,7 @@ class DeviceReadings {
      *                  The actual SignalK path reported is @see Plugin.options.skRunStatsPath prepended to leaf name.
      * @memberof DeviceReadings
      */
-     deltaValues() {
+    deltaValues() {
         const lastCycle = this.cycles.get(0);     // most recent completed cycle
         const retVal = {
             'status': this.status,
@@ -82,6 +83,7 @@ class DeviceReadings {
             'historyStart': dateToIntervalSec(this.historyDate),
             'lastCycleStart': dateToIntervalSec(lastCycle.date),
             'lastCycleRunTime': lastCycle.runSec,
+            'moment': Date.now(),       // needed to calibrate all the xxStart values.
         };
         return retVal;
     }
@@ -101,10 +103,10 @@ class DeviceReadings {
      */
     updateFromSample(sampleValue, sampleDate) {       // timestamp of new value (might be read from log)
 
-        const truthy_sampleValue = !!sampleValue;
+        const truthy_sample = !!sampleValue;
 
-        if (truthy_sampleValue != this.lastSample) {
-            if (truthy_sampleValue) {
+        if (truthy_sample != this.lastSample) {
+            if (truthy_sample) {
                 this.status = _device_status.ON;
             } else {
                 this.status = _device_status.OFF;
@@ -113,10 +115,12 @@ class DeviceReadings {
                 this.runTimeMs += curRunMs;
                 this.cycles.enq({           // append latest cycle to *end* of log...
                     date: this.edgeDate,
-                    runSec: toSec(sampleDate-this.edgeDate),
+                    runSec: toSec(curRunMs),
                 });
-                };
+            };
+
             this.edgeDate = sampleDate;     // now we have a new edge to count from
+            this.lastSample = truthy_sample;  // lastSample is a boolean.
         }
     }
 
@@ -253,7 +257,7 @@ class DeviceHandler {
             this.skPlugin.sendSKValues(values);
         }
         else {
-            this.app.debug('... suppressed trying to send an empty delta.')
+            this.skPlugin.debug('... suppressed trying to send an empty delta.')
         }
 
         this.lastSKReportDate = nowMs;

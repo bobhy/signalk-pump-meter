@@ -14,6 +14,19 @@ function delay(time) {
 }
 
 /**
+ * Turn duration measured in seconds back into a system time, based on a calibrating moment.
+ *
+ * The calculation is approximate, since the duration was rounded to the nearest second.
+ *
+ * @param {number} momentMs -- the moment against which the duration was calculated.
+ * @param {number} durationSec - the measured duration.  This is usually rounded to nearest whole second.
+ * @return {number} a unix system time (e.g from @see Date.now())
+ */
+function toAbsTime(momentMs, durationSec) {
+    return momentMs - 1000*durationSec;
+}
+
+/**
  * Instantiate plugin so tests can feed results and capture responses
  *
  * @class TestPlugin
@@ -40,7 +53,7 @@ class TestPlugin {
                     name: this.pluginDeviceName,
                     skMonitorPath: this.skMonitorPath,
                     skRunStatsPath: this.skRunStatsPath,
-                    secTimeout: 10,
+                    secTimeout: 20,
                     offsetHours: 0,
                     secReportInterval: 2
                 }
@@ -173,5 +186,5 @@ class RevChron {
 }
 
 module.exports = {
-    TestPlugin, RevChron, delay
+    TestPlugin, RevChron, delay, toAbsTime
 };
