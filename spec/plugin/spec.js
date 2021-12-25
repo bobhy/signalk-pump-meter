@@ -61,6 +61,7 @@ describe("pump meter history api", function () {
 */
 describe("lifecycle of PumpMeterPlugin", function () {
     var tp = new TestPlugin();
+    var rsp = {};
 
     it("can be instantiated", function () {
         expect(tp).toBeTruthy();
@@ -69,13 +70,15 @@ describe("lifecycle of PumpMeterPlugin", function () {
         expect(tp.options.devices[0].name).toEqual('testPluginName');
     });
 
-    it("can be started, communicated with, stopped and restarted OK", async function () {
+    it("can be started and starts emitting status", async function () {
         expect(tp.app.status).toEqual("Started");
-        tp.sendTo(1);
         rsp = await tp.getFrom();
         expect(rsp).toBeTruthy();
         expect(rsp.length).toBeGreaterThanOrEqual(1);
-        expect(rsp.last.cycleCount).toBeGreaterThanOrEqual(1);
+        expect(rsp.last.status).toEqual("OFFLINE");      //bug -- export pump status constants.
+    });
+
+    it("can be stopped and restarted and resumes emitting status", async function () {
         tp.plugin.stop();
         expect(tp.app.status).toEqual("Stopped");
         await expectAsync(tp.getFrom()).toBeRejected();
@@ -83,37 +86,34 @@ describe("lifecycle of PumpMeterPlugin", function () {
         expect(tp.app.status).toEqual("Started");
         rsp = await tp.getFrom();
         expect(rsp.length).toBeGreaterThanOrEqual(1);
+        expect(rsp.last.status).toEqual("OFFLINE");      //bug -- export pump status constants.
     });
 });
 
 describe("Steady state behavior when nothing is changing", function () {
     var tp = new TestPlugin();
-    it("generates responses every polling interval period", async function () {
+    it("generates responses every polling interval period describing same last edge", async function () {
         tp.sendTo(0);
-        var prev_time = Date.now();
-        var prev_rsp = await tp.getFrom();
+        const orig_rsp = await tp.getFrom();
         const reportIntervalMs = 1000 * tp.options.devices[0].secReportInterval;
+        var prev_time = Date.now();
 
-        for (i = 0; i < 5; i++) {
+        for (var i = 0; i < 5; i++) {
+            const cur_rsp = await tp.getFrom();
             const cur_time = Date.now();
-            const cur_rsp = await tp.getFrom();   // wait for next response
-            //not quantifiable! expect(cur_time - prev_time).toBeGreaterThanOrEqual(reportIntervalMs);
+
             expect(cur_time - prev_time).toBeLessThan(2 * reportIntervalMs);
-            expect(cur_rsp.length).toBeGreaterThanOrEqual(1);
-            expect(cur_rsp.last.cycleCount).toEqual(prev_rsp.last.cycleCount);  // cycle counts and accumulated run times don't chanve
+            expect(cur_rsp.last.lastCycleStart - orig_rsp.last.lastCycleStart).toBeCloseTo(cur_time - prev_time, 1);
+            expect(cur_rsp.last.cycleCount).toEqual(orig_rsp.last.cycleCount);  // cycle counts and accumulated run times don't chanve
             expect(cur_rsp.last.runTime).toEqual(0);
-            expect(cur_rsp.last.lastRunTime).toEqual(prev_rsp.last.lastRunTime);
-            // right after start, not stable value?expect(cur_rsp.last.lastRunStart - prev_rsp.last.lastRunStart).toEqual(reportIntervalMs); // but when it last ran is receeding into the past.
 
             prev_time = cur_time;
-            prev_rsp = cur_rsp;
-
         };
     });
 });
 
-describe("Details of emitted statistics", function () {
-    var tp = new TestPlugin();
+xdescribe("Details of emitted statistics", function () {
+    //var tp = new TestPlugin();
     it("extends current cycle and tot run time while receiving a run of truthy values, doesn't extend last run time", async function () {
         tp.sendTo(1);
         var prev_rsp = await tp.getFrom();
@@ -141,7 +141,7 @@ describe("Details of emitted statistics", function () {
             tp.sendTo(0);
             var cur_rsp = await tp.getFrom();
             var cur_time = Date.now();
-            expect(cur_rsp.last.cycleCount).toEqual(prev_rsp.last.cycleCount+1);
+            expect(cur_rsp.last.cycleCount).toEqual(prev_rsp.last.cycleCount + 1);
             expect(cur_rsp.last.runTime - prev_rsp.last.runTime).toBeCloseTo((cur_time - prev_time) / 1000, TIME_PREC);
             expect(cur_rsp.last.lastCycleRunTime).toEqual(prev_rsp.lastCycleRunTime);
             expect(cur_rsp.last.lastCycleStart - prev_rsp.last.lastCycleStart).toBeCloseTo((cur_time - prev_time) / 1000, TIME_PREC);
@@ -161,7 +161,7 @@ describe("Details of emitted statistics", function () {
 });
 
 
-describe("emits and saves to history expected values - 1 cycle", function () {
+xdescribe("emits and saves to history expected values - 1 cycle", function () {
     // 3 samples, capture all responses, compare to expected
     // get history, compare to expected history
 

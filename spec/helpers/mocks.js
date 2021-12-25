@@ -17,7 +17,8 @@ class MockStreambundle {
 
     getSelfStream(skPath) {
         var bus = this.getSelfBus(skPath);
-        return bus.map(".value");
+        const vv = bus.map(".value");
+        return vv;
 
     }
 

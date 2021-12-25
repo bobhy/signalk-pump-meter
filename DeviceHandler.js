@@ -2,17 +2,29 @@
 //todo -- invoke Newreading SendSK as soon as new reading detected, but respect report timeout (for testability)
 
 
-const { round } = require('lodash');
+const CircularBuffer = require('circular-buffer');
 const _ = require('lodash');
 
 // pump run statistics logged and reported periodically
 
+/**
+ * Convert an interval in units of ms to seconds.
+ *
+ * @param {*} msValue
+ * @return {*}
+ */
 function toSec(msValue) {   // convert MS to rounded # sec
     return Math.round(msValue / 1000.0)
 }
 
+/**
+ * Convert a date/time (in ms) to a number of seconds prior to *now*.
+ *
+ * @param {*} msValue
+ * @return {*}
+ */
 function dateToIntervalSec(msValue) {  // num sec before "now"
-    return Math.round(Date.now() - msValue, 1000.0);
+    return Math.round((Date.now() - msValue) / 1000.0);
 }
 
 /* allowed values of <reportPath>.status
@@ -43,7 +55,7 @@ class DeviceReadings {
 
         this.cycleCount = 0;                // number of OFF->ON transitions
         this.runTimeMs = 0;                 // integer number of ms
-        this.historyStartDate = Date.now(); // timestamp of start of data recording history
+        this.historyDate = Date.now(); // timestamp of start of data recording history
         this.status = _device_status.OFFLINE;
         this.edgeDate = Date.now();                  // most recent edge transition
 
@@ -72,18 +84,17 @@ class DeviceReadings {
         if (truthy_sampleValue != this.lastSample) {
             if (truthy_sampleValue) {
                 this.status = _device_status.ON;
-                this.edgeDate = sampleDate;
             } else {
+                this.status = _device_status.OFF;
                 const curRunMs = sampleDate - this.edgeDate;
                 this.cycleCount += 1;
                 this.runTimeMs += curRunMs;
                 this.cycles.enq({           // append latest cycle to *end* of log...
                     date: this.edgeDate,
-                    runSec: toSec(currunMs),
+                    runSec: toSec(sampleDate-this.edgeDate),
                 });
-                this.status = _device_status.OFF;
-                this.edgeDate = sampleDate;
-            }
+                };
+            this.edgeDate = sampleDate;     // now we have a new edge to count from
         }
     }
 
@@ -109,8 +120,8 @@ class DeviceReadings {
      * @memberof DeviceReadings
      */
     deltaValues() {
-        lastCycle = this.cycles.get(0);     // most recent completed cycle
-        return {
+        const lastCycle = this.cycles.get(0);     // most recent completed cycle
+        const retVal = {
             'status': this.status,
             'statusStart': dateToIntervalSec(this.edgeDate),
             'cycleCount': this.cycleCount,
@@ -118,7 +129,8 @@ class DeviceReadings {
             'historyStart': dateToIntervalSec(this.historyDate),
             'lastCycleStart': dateToIntervalSec(lastCycle.date),
             'lastCycleRunTime': lastCycle.runSec,
-        }
+        };
+        return retVal;
     }
 
 
@@ -166,12 +178,12 @@ class DeviceHandler {
         skPlugin.subscribeVal(this.skStream, this.onMonitorValue, this);
 
         this.readings = new DeviceReadings();
-
-        this.readings.restore(this.historyPath);
         this.historyPath = `${this.skPlugin.dataDir}/${this.id}.dat`;
-        this.lastSave = Date.now();
+        this.readings.restore(this.historyPath);
 
-        this.lastSKReport = Date.now();
+        this.lastSave = Date.now();
+        this.lastValueDate = Date.now();
+        this.lastSKReportDate = Date.now();
         //debug this.reportSK();
     }
 
@@ -193,7 +205,7 @@ class DeviceHandler {
         //fixme <timer> is a valid date/time, but does it match timestamp if data is played back from file?
 
         if (dateToIntervalSec(this.lastValueDate) >= this.config.secTimeout) {
-            this.readings.forceOffline(lastValueDate);
+            this.readings.forceOffline(this.lastValueDate);
         };
 
         if (dateToIntervalSec(this.lastSKReportDate) >= this.config.secReportInterval) {
@@ -233,18 +245,18 @@ class DeviceHandler {
     reportSK(nowMs) {
         var values = [];
 
-        for (const [k, v] of Object.entries(this.readings.toDelta())) {   //ugly k,v iteration!
+        for (const [k, v] of Object.entries(this.readings.deltaValues())) {   //ugly k,v iteration!
             values.push({ path: `${this.config.skRunStatsPath}.${k}`, value: v })
         }
 
-        if (!_.isEmpty(values)) {
+        if (values.length > 0) {
             this.skPlugin.sendSKValues(values);
         }
         else {
             this.app.debug('... suppressed trying to send an empty delta.')
         }
 
-        this.lastSKReport = nowMs;
+        this.lastSKReportDate = nowMs;
     }
 
 

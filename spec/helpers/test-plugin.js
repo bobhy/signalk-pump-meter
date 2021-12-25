@@ -50,6 +50,9 @@ class TestPlugin {
         this.responses = [];
         this.app.handleMessage = (id, delta) => {   // must use closure here to get the right 'this'
             this.responses.push(delta);  // hotwire handleMessage
+            if (this.responses.length > 2) {
+                var t = 1;
+            }
         };
         this.plugin.start(this.options);    //fixme this overrides the options defined in the UOT plugin!
                                             // but apparently in signalk-server, options are cons'ed sometime after constructor is run.
@@ -72,6 +75,15 @@ class TestPlugin {
         });
     }
 
+    /**
+     * retrieve SignalK deltas from UOT plugin., reformat results for easier testing (after validating delta itself).
+     * Note that the plugin may have queued multiple deltas, this call clears them all.
+     *
+     * @return {[{keyName: value}]} -- array of deltas, each item is an object of key, value pairs.
+     *                              key is leaf name of the SK path, e.g electrical.batteries.1.foo becomes just foo.
+     *                              value is unmodified.
+     * @memberof TestPlugin
+     */
     async getFrom() {
 
         const startWait = Date.now();
@@ -114,16 +126,8 @@ class TestPlugin {
      *
      * @memberof TestPlugin
      */
-    getHistory() {
-        var history = this.plugin.getHandler(this.pluginDeviceName).getHistory();   //bugbug -- this.pluginDeviceName same for all devices!
-        if (!!history) {
-            history.forEach(h => {
-                h.historyDate = new Date(h.historyDate);
-                h.sessionStartDate = new Date(h.sessionStartDate);
-                h.lastRunDate = new Date(h.lastRunDate);
-                h.lastSampleDate = new Date(h.lastSampleDate);
-            });
-        }
+    getHistory(start, end) {
+        var history = this.plugin.getHandler(this.pluginDeviceName).getHistory(start, end);   //bugbug -- this.pluginDeviceName same for all devices!
         //this.app.debug(JSON.stringify(history, null, 2));
         return history;
     }
