@@ -1,4 +1,4 @@
-// tests for pump meter api
+// tests for pump meter plugin and basic operation
 
 const { propTypes } = require("react-widgets/lib/Calendar");
 //const { PluginDriver } = require("../helpers/plugin-driver");

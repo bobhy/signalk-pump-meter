@@ -103,9 +103,15 @@ class PumpMeterPlugin extends SignalKPlugin {
       if (this.running) {
         var handler = this.getHandler(req.params.deviceId);
         if (handler != null) {
+          // API returns error as {status:nnn, msg:"string"}, or normal as object with no 'status' key
           let jReturnVal = handler.getHistory(req.query.start, req.query.end);
           this.debug(`api/history/${deviceId}: returning ${JSON.stringify(jReturnVal)}`)
-          res.json(jReturnVal);
+          if ('status' in jReturnVal) {
+            res.status(jReturn.status).send(('msg' in jReturnVal) ? jReturnVal.msg : "Unknown error");
+          }
+          else {
+            res.json(jReturnVal);
+          };
         }
         else {
           res.status(404).send(`Unknown device [${req.params.deviceId}]`);

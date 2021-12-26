@@ -43,10 +43,8 @@ class TestPlugin {
     heartbeatMs = 300;      // .toBeCloseTo() precision hacked till tests work for heartbeat [300, 2000].
 
     constructor() {
-        //this.mockClock = mockClock; // a jasmine mock clock
         this.dataPath = tmp.dirSync().name;       // create temp directory and return name
         this.app = new MockApp(this.dataPath);
-        //this.debug = this.app.debug;            //puzzle why do I have to hoist this when I didn't in sim-pump-meter?
         this.plugin = new Plugin(this.app);
         this.plugin.heartbeatMs = this.heartbeatMs;     // faster heartbeat to generate responses faster for faster testing!
         this.options = {

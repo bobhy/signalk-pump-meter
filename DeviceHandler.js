@@ -1,3 +1,5 @@
+
+
 //todo -- integrate history into DeviceReadings as in-memory circular buffer and as 2nd file on disk
 //todo -- invoke Newreading SendSK as soon as new reading detected, but respect report timeout (for testability)
 
@@ -61,7 +63,7 @@ class DeviceReadings {
         this.edgeDate = Date.now();                  // most recent edge transition
 
         this.cycles = new CircularBuffer(1000); // history of completed cycles: {start: <date/time>, run: <sec>})
-        this.cycles.enq({ date: Date.now(), runSec: 0 });  // dummy first completed cycle
+        this.cycles.push({ date: Date.now(), runSec: 0 });  // dummy first completed cycle
 
         //todo: establish checkpoint schedule, save live data t ofile every N sec.
     }
@@ -95,6 +97,16 @@ class DeviceReadings {
      * If going from ON to OFF, mark current cycle completed, add accumulated runTime to total runTime,
      * Optimized so no calculations need to be done while the value is unchanged, only on the rising or falling edge.
      *
+     * Rant about `.push()`:
+     * We use @see CircularBuffer to store history of completed cycles.  When adding the most recently completed cycle to the history,
+     * we use `.push()` rather than `.enq()`. This ensures that `.toarray()[0]` or `.get(0)` is the *oldest* item in history,
+     * which is the desired representation.
+     * I suppose @see CircularBuffer is following the *bad* example of @see Array.prototype in having
+     * `.push()` defined to append to the *end* of the buffer, but the CS101 definition of the operator is that
+     * *enqueue* adds an element to the end of the buffer, so *push* should prepend to the beginning.
+     * Oh well, the fathers have eaten sour grapes and the children's teeth are set on edge.
+     *
+     *
      * @param {*} sampleValue       - the observed value.  Any truthy value indicates device is ON.
      * @param {Date} sampleDate     - the timestamp of the value (which, if pulled from a log, might not be "now")
      * *                              So far, however, I can't figure out how to get the timestamp from the log, so
@@ -113,7 +125,7 @@ class DeviceReadings {
                 const curRunMs = sampleDate - this.edgeDate;
                 this.cycleCount += 1;
                 this.runTimeMs += curRunMs;
-                this.cycles.enq({           // append latest cycle to *end* of log...
+                this.cycles.push({           // append latest cycle to *end* of log...
                     date: this.edgeDate,
                     runSec: toSec(curRunMs),
                 });
@@ -265,23 +277,22 @@ class DeviceHandler {
 
 
 
-    parseDate(dt, defaultVal) {
+    parseDate(dt) {
 
-        if (typeof dt === 'string') {
-            let val = Date.parse(dt);
-            if (!isNaN(val)) {
-                return val;
-            }
-            else {
-                this.skPlugin.debug(`Ignoring invalid date format: ${dt}`);
-            }
-        }
-        else if (typeof dt === 'number') {
-            return dt;
-        }
-        return defaultVal;
+        switch (dt.constructor.name){
+            case 'Number':
+                return dt;
+            //case 'Date':              // actual external API will never present this type
+            //    return dt.getTime();
+            default:
+                const rv = Date.parse(dt);
+                if (!rv) {
+                    throw `Can't parse ${dt} as date/time`
+                }  else {
+                    return rv;
+                };
+        };
     }
-
 
 
     /**
@@ -289,23 +300,30 @@ class DeviceHandler {
      *
      * @param {*} start
      * @param {*} end
-     * @return {*}
+     * @return {*} Can be an error of form {status:nnn, msg:string} or an array of values
      * @memberof DeviceHandler
      */
     getHistory(start, end) {
 
-        this.app.debug(`${this.config.name} history request for ${start} thru ${end}`);
-        let startRange = this.parseDate(start, 0);
-        let endRange = this.parseDate(end, Date.now());
+        this.skPlugin.debug(`${this.config.name} history request for ${start} thru ${end}`);
 
-        let res = []
+        var startRange;
+        var endRange;
 
-        var i = 0;
-        hist = this.readings.cycles;
+        try {
+            startRange = (start == undefined) ? 0 : this.parseDate(start);
+            endRange = (end == undefined) ? Date.now() : this.parseDate(end);
+        } catch (e) {
+            return { status: 400, msg: e }; // http status 400 Bad Request
+        };
 
-        for (const [date, runSec] in hist.toarray()) {
-            if (date >= startRange) res.push({ date, runSec });
-            if (date > endRange) break;
+        let res = [];
+
+        const hist = this.readings.cycles;
+
+        for (const item of hist.toarray()) {
+            if (item.date > endRange) break;
+            if (item.date >= startRange) res.push(item);
         }
 
         return res
