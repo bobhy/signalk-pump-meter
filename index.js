@@ -47,13 +47,18 @@ class PumpMeterPlugin extends SignalKPlugin {
         if (device.skRunStatsPath === "") {
           device.skRunStatsPath = device.name;
         }
-        let handler = new DeviceHandler(this, device);
-        this.subscribeVal(this.evtHeartbeat, handler.onHeartbeat, handler);
-        this.handlers.push(handler);
+        setImmediate( async () => { // do device handler initialization as async process
+          let handler = new DeviceHandler(this, device);  // constructor can't be async
+          if (handler.start) {
+            await handler.start();    // do whatever long-running async the handler has.
+          };
+          this.subscribeVal(this.evtHeartbeat, handler.onHeartbeat, handler);
+          this.handlers.push(handler);
+        });
       }
     }
 
-    this.setStatus('Started');
+    this.setStatus('Started');  // with async init, check device status, not plugin status.
 
   }
 

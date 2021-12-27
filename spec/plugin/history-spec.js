@@ -1,17 +1,17 @@
 // tests for pump meter history recording and api
 
-const { TestPlugin, RevChron, delay, toAbsTime } = require("../helpers/test-plugin");
+const { newTestPlugin, TestPlugin, delay} = require("../helpers/test-plugin");
 const CircularBuffer = require('circular-buffer');
 
 const TIME_PREC = 0.5; // when comparing times, match to within 2 hundredths.  Jasmine *rounds* each value before comparing??!  takes fractional exponent?
-const TIME_PREC_MS = -4.5   // likewise when comparing millisecond values with full second variability.
+const TIME_PREC_MS = -3.5   // likewise when comparing millisecond values with full second variability.
 
 jasmine.DEFAULT_TIMEOUT_INTERVAL = 100000;
 
 describe("History API", function () {
-    beforeEach(function () {
+    beforeEach(async function () {
         // set up a canned history and attach it to a test plugin.  Return various useful parts in `this`
-        this.tp = new TestPlugin();
+        this.tp = await newTestPlugin();
         this.mockHistLen = 19;      // # actual dummy entries.  Buffer is bigger (by 1)
 
         this.mockCb = new CircularBuffer(this.mockHistLen + 1);
@@ -26,7 +26,7 @@ describe("History API", function () {
 
         this.expectedRet = this.mockCb.toarray();
 
-        this.tp.plugin.getHandler(this.tp.pluginDeviceName).readings.cycles = this.mockCb;  // monkey patch known history
+        this.tp.plugin.getHandler(this.tp.deviceName).readings.cycles = this.mockCb;  // monkey patch known history
 
     });
     it("Validates parameters", function () {
@@ -76,19 +76,20 @@ describe("History API", function () {
 });
 
 describe("Live history accumulation", function () {
-    beforeEach( async function () {
+    beforeEach(async function () {
         // set up a canned history and attach it to a test plugin.  Return various useful parts in `this`
-        this.tp = new TestPlugin();
+        this.tp = await newTestPlugin();
         this.mockHistCap = 10;
 
         this.mockCb = new CircularBuffer(this.mockHistCap);
-        this.tp.plugin.getHandler(this.tp.pluginDeviceName).readings.cycles = this.mockCb;  // monkey patch known history
+        this.mockCb.push({date:Date.now()-1000, runSec:0});       // .deltaValues() presumes there's always at least one cycle in history.
+
+        this.tp.plugin.getHandler(this.tp.deviceName).readings.cycles = this.mockCb;  // monkey patch known history
 
         this.addCycles = async (numCycles) => {
             for (var i = 0; i < numCycles; i++) {
                 this.tp.sendTo(i + 1);
                 var d = await this.tp.getFrom();
-                d = await this.tp.getFrom();
                 this.tp.sendTo(0);
                 d = await this.tp.getFrom();
             }
@@ -97,27 +98,67 @@ describe("Live history accumulation", function () {
 
     it("Records completed duty cycles", async function () {
         const desiredCycles = Math.floor(this.mockCb.capacity() / 2);
+        const orig_size = this.mockCb.size();   // current size including dummy initial cycles
+
         await this.addCycles(desiredCycles);
 
         const rv = this.tp.getHistory();
-        expect(rv.length).toEqual(desiredCycles);
+        expect(rv.length).toEqual(orig_size+desiredCycles);
 
         var prev_cycle = rv[0];
         for (var cur_cycle of rv.slice(1)) {
             expect(prev_cycle.date).toBeLessThan(cur_cycle.date);
-            expect(cur_cycle.runSec).toBeLessThanOrEqual(1);
+            expect(cur_cycle.runSec).toBeGreaterThan(0);    //
         }
     });
 
     it("Drops the oldest item when wrapping", async function () {
-        await this.addCycles(this.mockCb.capacity() - 1);
+        await this.addCycles(this.mockCb.capacity() -this.mockCb.size() - 1);
         const rv1 = this.tp.getHistory();
         await this.addCycles(3);        // first cycle fills buffer, next 2 cause oldest 2 to be dropped.
-        const rv2 =this.tp.getHistory();
-        const stillValid = rv2.length-2;
+        const rv2 = this.tp.getHistory();
+        const stillValid = rv2.length - 2;
         // test can be falsified  rv2[4] = {date:Date.now(), runSec:NaN}; // botch one value, see if test fails.
-        expect(rv1.slice(2)).toEqual(rv2.slice(0, stillValid-1));
+        expect(rv1.slice(2)).toEqual(rv2.slice(0, stillValid - 1));
     });
+});
+
+describe("Saving and restoring history to disk", function () {
+    beforeEach(async function () {
+        // set up a canned history and attach it to a test plugin.  Return various useful parts in `this`
+        this.tp = await newTestPlugin();
+        this.mockHistCap = 10;
+
+        this.mockCb = new CircularBuffer(this.mockHistCap);
+        this.mockCb.push({date:Date.now()-1000, runSec:0});       // .deltaValues() presumes there's always at least one cycle in history.
+        this.tp.plugin.getHandler(this.tp.deviceName).readings.cycles = this.mockCb;  // monkey patch known history
+
+        this.addCycles = async (numCycles) => {
+            for (var i = 0; i < numCycles; i++) {
+                this.tp.sendTo(i + 1);
+                var d = await this.tp.getFrom();
+                this.tp.sendTo(0);
+                d = await this.tp.getFrom();
+            }
+        };
+    });
+
+    xit("loads old history from disk, if found", async function(){
+
+    });
+
+    xit("periodically checkpoints running history to disk", async function(){
+
+    });
+
+    xit("handles various kinds of data corruption when reloading from disk", async function(){
+
+    });
+
+    xit("detects and handles case when excessively old history is loaded", async function(){
+
+    });
+
 });
 
 

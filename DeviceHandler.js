@@ -1,22 +1,28 @@
-
-
-//todo -- integrate history into DeviceReadings as in-memory circular buffer and as 2nd file on disk
-//todo -- invoke Newreading SendSK as soon as new reading detected, but respect report timeout (for testability)
-
-
 const CircularBuffer = require('circular-buffer');
+const JSZip = require('jszip');
 const _ = require('lodash');
+const assert = require('assert').strict;
 
 // pump run statistics logged and reported periodically
 
 /**
  * Convert an interval in units of ms to seconds.
  *
+ * Round small (but non-zero) intervals up to 1 second, others to *nearest* second.
+ * This won't make much difference in the real world (it says here), but is important
+ * for testability, where we run with very short timeouts.
+ *
  * @param {*} msValue
  * @return {*}
  */
 function toSec(msValue) {   // convert MS to rounded # sec
-    return Math.round(msValue / 1000.0)
+    var retVal = 0;
+    if (msValue > 500) {
+        retVal = Math.round(msValue / 1000.0);
+    } else if (msValue > 0) {
+        retVal = 1;
+    };
+    return retVal;
 }
 
 /**
@@ -26,7 +32,14 @@ function toSec(msValue) {   // convert MS to rounded # sec
  * @return {*}
  */
 function dateToIntervalSec(msValue) {  // num sec before "now"
-    return Math.round((Date.now() - msValue) / 1000.0);
+    const intervalMs = Date.now() - msValue;
+    if (intervalMs > 500) {
+        return Math.round(intervalMs / 1000.0);
+    } else if (intervalMs > 0) {
+        return 1;
+    } else {
+        return 0;
+    }
 }
 
 /* allowed values of <reportPath>.status
@@ -76,7 +89,7 @@ class DeviceReadings {
      * @memberof DeviceReadings
      */
     deltaValues() {
-        const lastCycle = this.cycles.get(0);     // most recent completed cycle
+        const lastCycle = this.cycles.get(this.cycles.size()-1);     //bugbug cb considers most recently pushed element to be at *end* of queue?
         const retVal = {
             'status': this.status,
             'statusStart': dateToIntervalSec(this.edgeDate),
@@ -85,8 +98,10 @@ class DeviceReadings {
             'historyStart': dateToIntervalSec(this.historyDate),
             'lastCycleStart': dateToIntervalSec(lastCycle.date),
             'lastCycleRunTime': lastCycle.runSec,
-            'moment': Date.now(),       // needed to calibrate all the xxStart values.
+            //'moment': Date.now(),       // needed to calibrate all the xxStart values.
+            //'startsMs': { 'statusStart': this.edgeDate, 'historyStart': this.historyDate, 'lastCycleStart': lastCycle.date },
         };
+        if (retVal.lastCycleStart)
         return retVal;
     }
 
@@ -153,10 +168,17 @@ class DeviceReadings {
     /**
      * Restore checkpointed data, if possible
      *
+     * Has the side effect of updating relevant properties of `this`.
+     *
      * @param {*} filePath
      * @memberof DeviceReadings
      */
     restore(filePath) {
+
+        const zipHandler = new JSZip();
+
+
+
 
     }
 
@@ -190,23 +212,30 @@ class DeviceHandler {
         this.skPlugin = skPlugin;
         this.config = config;
         this.id = _.camelCase(config.name);
-        this.skStream = skPlugin.getSKValues(config.skMonitorPath);
-        skPlugin.subscribeVal(this.skStream, this.onMonitorValue, this);
 
         this.readings = new DeviceReadings();
         this.historyPath = `${this.skPlugin.dataDir}/${this.id}.dat`;
         this.readings.restore(this.historyPath);
 
+        // when device handler ready, arm the listener event.
+        // unseen here, but on return from this constructor, plugin will arm the heartbeat event.
+
+        this.skStream = skPlugin.getSKValues(config.skMonitorPath);
+        skPlugin.subscribeVal(this.skStream, this.onMonitorValue, this);
+
         this.lastSave = Date.now();
         this.lastValueDate = Date.now();
         this.lastSKReportDate = Date.now();
-        //debug this.reportSK();
+        this.lastHeartbeatMs = Date.now();
+        this.status = "Starting";
+        this.status = "Started";
     }
 
 
     stop() {
         this.skPlugin.debug(`Stopping ${this.config.name}`);
         this.readings.save(this.historyPath);
+        this.status = "Stopped";
     }
 
 
@@ -220,12 +249,18 @@ class DeviceHandler {
         //this.skPlugin.debug(`onHeartbeat(${JSON.stringify(timer)})`);
         //fixme <timer> is a valid date/time, but does it match timestamp if data is played back from file?
 
+        assert(this.lastHeartbeatMs < nowMs, `No back-to-back heartbeats.  Detected interval is: ${nowMs - this.lastHeartbeatMs}.`);
+        this.lastHeartbeatMs = nowMs;
+
+        assert.equal(this.status, "Started", "No heartbeat event till device handler fully started");
+
         if (dateToIntervalSec(this.lastValueDate) >= this.config.secTimeout) {
             this.readings.forceOffline(this.lastValueDate);
         };
 
         if (dateToIntervalSec(this.lastSKReportDate) >= this.config.secReportInterval) {
             this.reportSK(nowMs);
+            this.lastSKReportDate = nowMs;
         };
 
         if (dateToIntervalSec(this.lastSave) > this.config.secCheckpoint) {
@@ -246,6 +281,8 @@ class DeviceHandler {
      * @memberof DeviceHandler
      */
     onMonitorValue(val) {
+        assert.equal(this.status, "Started", "No new input events till device handler fully started");
+
         this.skPlugin.debug(`onMonitorValue(${JSON.stringify(val)})`);
         this.lastValueDate = Date.now();
         this.readings.updateFromSample(val, Date.now());        // update readings and cyclecount history.
@@ -271,15 +308,13 @@ class DeviceHandler {
         else {
             this.skPlugin.debug('... suppressed trying to send an empty delta.')
         }
-
-        this.lastSKReportDate = nowMs;
     }
 
 
 
     parseDate(dt) {
 
-        switch (dt.constructor.name){
+        switch (dt.constructor.name) {
             case 'Number':
                 return dt;
             //case 'Date':              // actual external API will never present this type
@@ -288,7 +323,7 @@ class DeviceHandler {
                 const rv = Date.parse(dt);
                 if (!rv) {
                     throw `Can't parse ${dt} as date/time`
-                }  else {
+                } else {
                     return rv;
                 };
         };
@@ -304,6 +339,7 @@ class DeviceHandler {
      * @memberof DeviceHandler
      */
     getHistory(start, end) {
+        assert.equal(this.status, "Started", "No API calls till device handler fully started");
 
         this.skPlugin.debug(`${this.config.name} history request for ${start} thru ${end}`);
 
