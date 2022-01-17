@@ -7,7 +7,8 @@ tmp.setGracefulCleanup();   //todo how to make the tmp files disappear??
 //const jasmine = require('jasmine');
 const assert = require('assert').strict;
 
-//const mockClock = jasmine.clock().install();
+const TIME_PREC = 0.5; // when comparing times, match to within 2 or 3 hundredths.  Jasmine *rounds* each value before comparing??!  takes fractional exponent?
+const TIME_PREC_MS = -0.5   // likewise when comparing millisecond values, match within 2-3 tens of milliseconds.
 
 function delay(time) {
     return new Promise(resolve => setTimeout(resolve, time));
@@ -195,5 +196,5 @@ class RevChron {
 }
 
 module.exports = {
-    TestPlugin, delay, newTestPlugin, test_toSec
+    TestPlugin, delay, newTestPlugin, test_toSec, TIME_PREC, TIME_PREC_MS
 };

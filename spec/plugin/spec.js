@@ -2,10 +2,7 @@
 
 const { propTypes } = require("react-widgets/lib/Calendar");
 //const { PluginDriver } = require("../helpers/plugin-driver");
-const { newTestPlugin, TestPlugin, RevChron, delay, test_toSec } = require("../helpers/test-plugin");
-
-const TIME_PREC = 0.5; // when comparing times, match to within 2 hundredths.  Jasmine *rounds* each value before comparing??!  takes fractional exponent?
-const TIME_PREC_MS = -3.5   // likewise when comparing millisecond values with full second variability.
+const { newTestPlugin, TestPlugin, RevChron, delay, test_toSec, TIME_PREC, TIME_PREC_MS } = require("../helpers/test-plugin");
 
 jasmine.DEFAULT_TIMEOUT_INTERVAL = 100000;
 

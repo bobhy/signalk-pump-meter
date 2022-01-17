@@ -1,10 +1,7 @@
 // tests for pump meter history recording and api
 
-const { newTestPlugin, TestPlugin, delay } = require("../helpers/test-plugin");
+const { newTestPlugin, TestPlugin, delay, TIME_PREC, TIME_PREC_MS } = require("../helpers/test-plugin");
 const CircularBuffer = require('circular-buffer');
-
-const TIME_PREC = 0.5; // when comparing times, match to within 2 hundredths.  Jasmine *rounds* each value before comparing??!  takes fractional exponent?
-const TIME_PREC_MS = -3.5   // likewise when comparing millisecond values with full second variability.
 
 jasmine.DEFAULT_TIMEOUT_INTERVAL = 100000;
 
