@@ -8,38 +8,23 @@ const assert = require('assert').strict;
 /**
  * Convert an interval in units of ms to seconds.
  *
- * Round small (but non-zero) intervals up to 1 second, others to *nearest* second.
- * This won't make much difference in the real world (it says here), but is important
- * for testability, where we run with very short timeouts.
+ * For testability, keep fractional milliseconds, so we can see time pass even with sub-second heartbeat.
  *
- * @param {*} msValue
- * @return {*}
+ * @param {number} msValue
+ * @return {number} number of seconds with 3 decimal places.
  */
-function toSec(msValue) {   // convert MS to rounded # sec
-    var retVal = 0;
-    if (msValue > 500) {
-        retVal = Math.round(msValue / 1000.0);
-    } else if (msValue > 0) {
-        retVal = 1;
-    };
-    return retVal;
+function toSec(msValue) {
+    return (Math.round(msValue) / 1000.0);
 }
 
 /**
  * Convert a date/time (in ms) to a number of seconds prior to *now*.
  *
- * @param {*} msValue
- * @return {*}
+ * @param {number} msValue
+ * @return {number} number of seconds prior to now, to 3 decimal places
  */
 function dateToIntervalSec(msValue) {  // num sec before "now"
-    const intervalMs = Date.now() - msValue;
-    if (intervalMs > 500) {
-        return Math.round(intervalMs / 1000.0);
-    } else if (intervalMs > 0) {
-        return 1;
-    } else {
-        return 0;
-    }
+    return (Math.round(Date.now() - msValue) / 1000.0);
 }
 
 /* allowed values of <reportPath>.status

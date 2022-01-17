@@ -2,7 +2,7 @@
 
 const { propTypes } = require("react-widgets/lib/Calendar");
 //const { PluginDriver } = require("../helpers/plugin-driver");
-const { newTestPlugin, TestPlugin, RevChron, delay } = require("../helpers/test-plugin");
+const { newTestPlugin, TestPlugin, RevChron, delay, test_toSec } = require("../helpers/test-plugin");
 
 const TIME_PREC = 0.5; // when comparing times, match to within 2 hundredths.  Jasmine *rounds* each value before comparing??!  takes fractional exponent?
 const TIME_PREC_MS = -3.5   // likewise when comparing millisecond values with full second variability.
@@ -55,7 +55,7 @@ describe("Steady state behavior when nothing is changing", function () {
             const cur_time = Date.now();
 
             expect(cur_time - prev_time).toBeLessThan(2.1 * reportIntervalMs);  // fudge factor for a few milliseconds difference
-            expect(orig_rsp._ms_lastCycleStart).toBeCloseTo(orig_time, TIME_PREC_MS);
+            expect(orig_rsp.lastCycleStart).toBeCloseTo(test_toSec(Date.now() - orig_time), TIME_PREC_MS);
             expect(cur_rsp.cycleCount).toEqual(orig_rsp.cycleCount);  // cycle counts and accumulated run times don't chanve
             expect(cur_rsp.runTime).toEqual(0);
 
@@ -78,8 +78,8 @@ describe("During run of truthy values", function () {
             var cur_time = Date.now();
             expect(cur_rsp.cycleCount).toEqual(prev_rsp.cycleCount);
             expect(cur_rsp.runTime).toEqual(prev_rsp.runTime);
-            expect(cur_rsp._ms_statusStart).toBeGreaterThanOrEqual(prev_rsp._ms_statusStart); // can be equal due to *ROUNDING* of ms to sec!
-            expect(cur_rsp._ms_statusStart).toBeCloseTo(orig_time, TIME_PREC_MS);
+            expect(cur_rsp.statusStart).toBeGreaterThan(prev_rsp.statusStart);
+            expect(cur_rsp.statusStart).toBeCloseTo(test_toSec(Date.now() - orig_time), TIME_PREC_MS);
 
             prev_rsp = cur_rsp;
             prev_time = cur_time;
@@ -105,12 +105,12 @@ describe("At ON to OFF transition", function () {
             prev_rsp = await tp.getFrom();
 
             // during ON time, is accumulating current cycle duration in statusStart
-            expect(prev_rsp._ms_statusStart).toBeCloseTo(at_on_moment, TIME_PREC_MS);
-            prev_statusStart = prev_rsp._ms_statusStart;
+            expect(prev_rsp.statusStart).toBeCloseTo(test_toSec(Date.now() - at_on_moment), TIME_PREC_MS);
+            prev_statusStart = prev_rsp.statusStart;
 
             // during ON status, the "lastCycle" reported is unchanged.
             expect(pre_on_rsp.lastCycleRunTime).toEqual(prev_rsp.lastCycleRunTime);
-            expect(pre_on_rsp._ms_lastCycleStart).toBeCloseTo(prev_rsp._ms_lastCycleStart, TIME_PREC_MS);
+            expect(pre_on_rsp.lastCycleStart).toBeCloseTo(prev_rsp.lastCycleStart, TIME_PREC_MS);
         };
 
         const during_on_rsp = prev_rsp;
@@ -119,7 +119,6 @@ describe("At ON to OFF transition", function () {
 
         tp.sendTo(0);       // terminate this duty cycle
         const at_off_moment = Date.now();
-
         const at_off_rsp = await tp.getFrom();
 
         expect(at_off_rsp.cycleCount).toEqual(during_on_rsp.cycleCount + 1);
@@ -127,9 +126,8 @@ describe("At ON to OFF transition", function () {
 
         // last cycle was just ended.  That means it *started* when the first OFF to ON was seen,
         // and that its duration was all the time ONs were seen (which is the same duration)
-        expect(at_off_rsp.lastCycleRunTime * 1000 -(at_off_moment - at_on_moment)).toBeLessThan(510);     // last cycle started when plugin saw first OFF to ON
-                                                                                                            // .lastCycleRuntime rounded to nearest sec, jasmine close to can't cope.
-        expect(at_off_rsp._ms_lastCycleStart).toBeCloseTo(at_on_moment, TIME_PREC_MS)
+        expect(at_off_rsp.lastCycleRunTime * 1000 - (at_off_moment - at_on_moment)).toBeLessThan(510);     // last cycle started when plugin saw first OFF to ON
+        expect(at_off_rsp.lastCycleStart).toBeCloseTo(test_toSec(Date.now() - at_on_moment), TIME_PREC_MS)
     });
 });
 
