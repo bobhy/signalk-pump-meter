@@ -2,6 +2,8 @@ const CircularBuffer = require('circular-buffer');
 const JSZip = require('jszip');
 const _ = require('lodash');
 const assert = require('assert').strict;
+const Data = require('dataclass').Data;
+
 
 // pump run statistics logged and reported periodically
 
@@ -35,7 +37,36 @@ const _device_status = {
     OFF: "OFF",         // device off (not running)
     ON: "ON"           // device on (is running)
 }
+/**
+ * SignalK Key, containing value and metadata, as it appears in a delta
+ * 
+ * Default metadata is incomplete, to keep delta size under some control.
+ *
+ * @class SK_Key
+ * @extends {Data}
+ */
+class SK_Key extends Data {
+    value = 0;
+    meta = {
+        description: "canonical description",
+        displayName: "panel label",
+        units: "none", // required if value is numeric
+        displayScale: { lower: 0, upper: 100, type: "linear" },  // or logarithmic, squareroot or power
+        warnMethod: ["visual"],
+        alertMethod: ["visual"],
+        alarmMethod: ["visual", "sound"],
+        emergencyMethod: ["visual", "sound"],
+        zones: [
+            // ranges tested via first fit based on 'state'
+            // state: emergency (highest), alarm, warn, alert, normal, nominal (lowest)
+            { lower: 0, upper: 10, state: "alarm", message: "too low" }
+        ]
+    }
+}
 
+const PumpMeterKeys = [
+    new SK_Key.create({})
+]
 
 /**
  * Device run time statistics
@@ -74,7 +105,7 @@ class DeviceReadings {
      * @memberof DeviceReadings
      */
     deltaValues() {
-        const lastCycle = this.cycles.get(this.cycles.size()-1);     //bugbug cb considers most recently pushed element to be at *end* of queue?
+        const lastCycle = this.cycles.get(this.cycles.size() - 1);     //bugbug cb considers most recently pushed element to be at *end* of queue?
         const retVal = {
             'status': this.status,
             'statusStart': dateToIntervalSec(this.edgeDate),
@@ -87,7 +118,7 @@ class DeviceReadings {
             //'startsMs': { 'statusStart': this.edgeDate, 'historyStart': this.historyDate, 'lastCycleStart': lastCycle.date },
         };
         if (retVal.lastCycleStart)
-        return retVal;
+            return retVal;
     }
 
 

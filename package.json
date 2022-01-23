@@ -9,6 +9,7 @@
     "baconjs": "^1.0.0",
     "binary-parser-encoder": "*",
     "circular-buffer": "^1.0.3",
+    "dataclass": "^2.0.0",
     "jszip": "^3.7.1",
     "lodash": "^4.17.21",
     "path": "^0.12.7",
