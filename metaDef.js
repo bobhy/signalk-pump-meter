@@ -1,5 +1,5 @@
 
-import { Data } from 'dataclass'
+const { Data } = require('dataclass');
 
 /**
  * Define a SignalK key and associated metadata
@@ -7,7 +7,7 @@ import { Data } from 'dataclass'
  * @class SK_Key
  * @extends {Data}
  */
-export class SK_Key extends Data {
+class SK_Key extends Data {
     key = "";                   // key in data objects
     label = "";                 // displayName in meta
     description = "";           // description in meta
@@ -38,11 +38,9 @@ export class SK_Key extends Data {
         } else { mv.units = this.units };
 
 
-        
+
         // displayScale -- set from this.scale, lower/upper range and scale type
-        if (this.scale.length == 0) {
-            mv.displayScale = { type: "linear", lower: low_gauge, upper: high_gauge };
-        } else {
+        if (this.scale.length >= 2) {
             mv.displayScale.lower = this.scale[0];
             mv.displayScale.upper = this.scale[1];
             switch (this.scale.length) {
@@ -61,7 +59,7 @@ export class SK_Key extends Data {
         };
 
         this.range.forEach(r => {
-            z = {};
+            const z = {};
             if (r[0] !== undefined) z.lower = r[0];
             if (r[1] !== undefined) z.upper = r[1];
             z.state = 'normal';
@@ -75,9 +73,10 @@ export class SK_Key extends Data {
     }
 }
 
+
 const AVERAGE_PUMP_CURRENT = 3;     // SWAG, average pump draw when running
 
-export const plugin_keys = [
+const pluginKeys = [
 
     // cumulative statistics accumulated over (resettable) statistics start d/t.
     SK_Key.create({
@@ -99,7 +98,7 @@ export const plugin_keys = [
 
     // updated per completed cycle
     , SK_Key.create({
-        key: "lastRunTime", label: "Run Time", units: "s", scale=[0, 150]
+        key: "lastRunTime", label: "Run Time", units: "s", scale: [0, 150]
         , description: "Runtime of last completed cycle"
         , range: [
             [undefined, 1, "alarm", "Pump run too short (alarm)"]
@@ -109,15 +108,15 @@ export const plugin_keys = [
             , [60, 120, "warn", "Pump run too long"]
             , [120, undefined, "alarm", "Pump run too long (alarm)"]
         ]
-    }) , SK_Key.create({
-        key: "lastWork", label: "Work", units: "C", scale=[0, 150]
+    }), SK_Key.create({
+        key: "lastWork", label: "Work", units: "C", scale: [0, 150]
         , description: "Work accomplished in last completed cycle"
         , range: [
-            [undefined,AVERAGE_PUMP_CURRENT * 1, "alarm", "Pump run too short (alarm)"]
-            , [1 * AVERAGE_PUMP_CURRENT,7 * AVERAGE_PUMP_CURRENT, "warn", "Pump run too short"]
-            , [7 * AVERAGE_PUMP_CURRENT,30 * AVERAGE_PUMP_CURRENT, "nominal"]
-            , [7 * AVERAGE_PUMP_CURRENT,60 * AVERAGE_PUMP_CURRENT, "normal"]
-            , [60 * AVERAGE_PUMP_CURRENT,120 * AVERAGE_PUMP_CURRENT, "warn", "Pump run too long"]
+            [undefined, AVERAGE_PUMP_CURRENT * 1, "alarm", "Pump run too short (alarm)"]
+            , [1 * AVERAGE_PUMP_CURRENT, 7 * AVERAGE_PUMP_CURRENT, "warn", "Pump run too short"]
+            , [7 * AVERAGE_PUMP_CURRENT, 30 * AVERAGE_PUMP_CURRENT, "nominal"]
+            , [7 * AVERAGE_PUMP_CURRENT, 60 * AVERAGE_PUMP_CURRENT, "normal"]
+            , [60 * AVERAGE_PUMP_CURRENT, 120 * AVERAGE_PUMP_CURRENT, "warn", "Pump run too long"]
             , [120 * AVERAGE_PUMP_CURRENT, undefined, "alarm", "Pump run too long (alarm)"]
         ]
     })
@@ -133,14 +132,15 @@ export const plugin_keys = [
  * @export
  * @return {*} 
  */
-export function genDelta(basePath) {
+function genDelta(basePath) {
 
     let mv = []
 
-    plugin_keys.forEach(mk => {
-        mv.push({ path: `${basePath}.${mk.key}`, value: mk.genMeta() })
+    pluginKeys.forEach(mk => {
+        mv.push({ path: `${basePath}.${mk.key}`, value: mk.metaGen() })
     });
 
     return { context: "vessels.self", updates: [{ meta: [mv] }] }
 }
 
+module.exports = { genDelta, pluginKeys, SK_Key }

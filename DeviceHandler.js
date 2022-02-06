@@ -63,10 +63,56 @@ class SK_Key extends Data {
         ]
     }
 }
+/** @type {*} */
+const PumpMeterKeys = {
+    cycleCount: SK_Key.create({
+        meta: {
+            description: "",
+            displayName: "",
+            units: "", displayScale: { lower: 0, upper: 100, type: "" },
+            zones: [
+                { lower: 0, upper: 100, state: "normal" }
+            ]
+        },
+        value: 0
+    }),
+    runTime: SK_Key.create({
+        meta: {
+            description: "",
+            displayName: "",
+            units: "", displayScale: { lower: 0, upper: 100, type: "" },
+            zones: [
+                { lower: 0, upper: 100, state: "normal" }
+            ]
+        },
+        value: 0
+    }),
+    effort: SK_Key.create({
+        meta: {
+            description: "",
+            displayName: "",
+            units: "", displayScale: { lower: 0, upper: 100, type: "" },
+            zones: [
+                { lower: 0, upper: 100, state: "normal" }
+            ]
+        },
+        value: 0
+    }),
 
-const PumpMeterKeys = [
-    new SK_Key.create({})
-]
+    /*
+    runTime: SK_Key.create({
+        meta: {
+            description: "",
+            displayName: "",
+            units: "", displayScale: { lower: 0, upper: 100, type: "" },
+            zones: [
+                { lower: 0, upper: 100, state: "normal" }
+            ]
+        },
+        value: 0
+    }),
+    */
+}
 
 /**
  * Device run time statistics
@@ -190,10 +236,7 @@ class DeviceReadings {
      * @memberof DeviceReadings
      */
     restore(filePath) {
-
         const zipHandler = new JSZip();
-
-
 
 
     }
