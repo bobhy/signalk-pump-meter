@@ -1,3 +1,4 @@
+const { SkMeta, SkValue } = require('./SkValue');
 const CircularBuffer = require('circular-buffer');
 const JSZip = require('jszip');
 const _ = require('lodash');
@@ -7,112 +8,55 @@ const Data = require('dataclass').Data;
 
 // pump run statistics logged and reported periodically
 
+
 /**
- * Convert an interval in units of ms to seconds.
+ * Convert internal time or time difference from milliseconds to SK units (seconds)
  *
- * For testability, keep fractional milliseconds, so we can see time pass even with sub-second heartbeat.
- *
- * @param {number} msValue
- * @return {number} number of seconds with 3 decimal places.
+ * @param {*} msValue Timestamp (or time difference) in internal units, milliseconds (since linux epoch).
+ * @return {number}  Same value in SK-(== SI standard) time units (seconds). Value has 3 decimal places (milliseconds) for testability with sub-second heartbeat.
  */
-function toSec(msValue) {
-    return (Math.round(msValue) / 1000.0);
+function dateToSec(msValue) {
+    return Math.round(msValue * 1000.0) / 1000.0;
 }
 
 /**
- * Convert a date/time (in ms) to a number of seconds prior to *now*.
+ * timestamp string of arbitrary time
  *
- * @param {number} msValue
- * @return {number} number of seconds prior to now, to 3 decimal places
+ * @param {Date} moment
+ * @return {string} ISO format date/time stamp: yyyy-mm-ddThh:mm:ss.mmmZ
  */
-function dateToIntervalSec(msValue) {  // num sec before "now"
-    return (Math.round(Date.now() - msValue) / 1000.0);
-}
-
-/* allowed values of <reportPath>.status
- */
-
-const _device_status = {
-    OFFLINE: 'OFFLINE',    // device not currently reporting anything
-    OFF: "OFF",         // device off (not running)
-    ON: "ON"           // device on (is running)
+function timestamp(moment) {
+    return moment.toISOString();
 }
 /**
- * SignalK Key, containing value and metadata, as it appears in a delta
+ * Enum for possible states of device: STOPPED, RUNNING, OFFLINE (means device hasn't reported any status in "too" long).
+ *
+ * inspired by https://2ality.com/2020/01/enum-pattern.html
  * 
- * Default metadata is incomplete, to keep delta size under some control.
- *
- * @class SK_Key
- * @extends {Data}
+ * @class DeviceStatus
  */
-class SK_Key extends Data {
-    value = 0;
-    meta = {
-        description: "canonical description",
-        displayName: "panel label",
-        units: "none", // required if value is numeric
-        displayScale: { lower: 0, upper: 100, type: "linear" },  // or logarithmic, squareroot or power
-        warnMethod: ["visual"],
-        alertMethod: ["visual"],
-        alarmMethod: ["visual", "sound"],
-        emergencyMethod: ["visual", "sound"],
-        zones: [
-            // ranges tested via first fit based on 'state'
-            // state: emergency (highest), alarm, warn, alert, normal, nominal (lowest)
-            { lower: 0, upper: 10, state: "alarm", message: "too low" }
-        ]
+class DeviceStatus {
+    static OFFLINE = new DeviceStatus("OFFLINE");
+    static STOPPED = new DeviceStatus("STOPPED");
+    static RUNNING = new DeviceStatus("RUNNING");
+
+    constructor(label) {
+        return this.label = label;
+    }
+
+    toString() {
+        return this.label;
     }
 }
-/** @type {*} */
-const PumpMeterKeys = {
-    cycleCount: SK_Key.create({
-        meta: {
-            description: "",
-            displayName: "",
-            units: "", displayScale: { lower: 0, upper: 100, type: "" },
-            zones: [
-                { lower: 0, upper: 100, state: "normal" }
-            ]
-        },
-        value: 0
-    }),
-    runTime: SK_Key.create({
-        meta: {
-            description: "",
-            displayName: "",
-            units: "", displayScale: { lower: 0, upper: 100, type: "" },
-            zones: [
-                { lower: 0, upper: 100, state: "normal" }
-            ]
-        },
-        value: 0
-    }),
-    effort: SK_Key.create({
-        meta: {
-            description: "",
-            displayName: "",
-            units: "", displayScale: { lower: 0, upper: 100, type: "" },
-            zones: [
-                { lower: 0, upper: 100, state: "normal" }
-            ]
-        },
-        value: 0
-    }),
 
-    /*
-    runTime: SK_Key.create({
-        meta: {
-            description: "",
-            displayName: "",
-            units: "", displayScale: { lower: 0, upper: 100, type: "" },
-            zones: [
-                { lower: 0, upper: 100, state: "normal" }
-            ]
-        },
-        value: 0
-    }),
-    */
-}
+/** @type {[string]} Array of all available device status values
+ * Enums in other languages make this easier to get! 
+ * 
+ */
+var DeviceStatus_all = [];
+DeviceStatus_all = Object.keys(DeviceStatus).forEach(f => DeviceStatus_all.push(f))
+DeviceStatus_all = Object.freeze(DeviceStatus_all); // whew!
+
 
 /**
  * Device run time statistics
@@ -130,12 +74,74 @@ class DeviceReadings {
      */
     constructor() {
 
-        this.cycleCount = 0;                // number of OFF->ON transitions
-        this.runTimeMs = 0;                 // integer number of ms
-        this.historyDate = Date.now();      // timestamp of start of data recording history
-        this.lastSample = 0;                // last sample seen
-        this.status = _device_status.OFFLINE;
-        this.edgeDate = Date.now();                  // most recent edge transition
+        //todo generate correct SK meta schema at runtime startup, until SkMeta API is fixed. DRY this out.
+
+        this.status = new SkValue('status', DeviceStatus.OFFLINE, {
+            label: "Current status", enum: DeviceStatus_all,
+            description: "Current status of device.  OFFLINE means no status report in 'too' long."
+        });
+
+        // statistics accumulated from a resettable starting point in time
+
+        this.since = new SkValue('since',
+            Date.now(),
+            {
+                label: "Statistics Start", units: "timestamp",
+                description: "cycles and runtime since this moment"
+            },
+            (v) => { return (new Date(v)).toISOString(); }
+        );
+
+        this.sinceCycles = new SkValue('sinceCycles', {
+            label: "Run Cycles",
+            description: "On-off duty cycles since statistics start"
+        });
+
+        this.sinceRunTime = new SkValue('sinceRunTime', {
+            label: "Run Time", units: "s"
+            , description: "Cumulative run time since statistics start"
+        });
+
+        this.sinceWork = new SkValue('sinceWork', {
+            label: "Work", units: "C",
+            description: "Cumulative work accomplished since statistics start in A.s (Coulombs).  Divide by 3600 for A.h."
+        });
+
+        // statistics updated per completed cycle (at end of cycle)
+
+        this.lastRunTime = new SkValue('lastRunTime', {
+            label: "Run Time", units: "s", scale: [0, 150]
+            , description: "Runtime of last completed cycle"
+            , range: [
+                [undefined, 1, "alarm", "Pump run too short (alarm)"]
+                , [1, 7, "warn", "Pump run too short"]
+                , [7, 30, "nominal"]
+                , [7, 60, "normal"]
+                , [60, 120, "warn", "Pump run too long"]
+                , [120, undefined, "alarm", "Pump run too long (alarm)"]
+            ]
+        });
+
+        const AVERAGE_PUMP_CURRENT = 3;     // SWAG, average pump draw when running, used to set ranges
+
+        this.lastWork = new SkValue('lastWork', {
+            label: "Work", units: "C", scale: [0, 150]
+            , description: "Work accomplished in last completed cycle"
+            , range: [
+                [undefined, AVERAGE_PUMP_CURRENT * 1, "alarm", "Pump run too short (alarm)"]
+                , [1 * AVERAGE_PUMP_CURRENT, 7 * AVERAGE_PUMP_CURRENT, "warn", "Pump run too short"]
+                , [7 * AVERAGE_PUMP_CURRENT, 30 * AVERAGE_PUMP_CURRENT, "nominal"]
+                , [7 * AVERAGE_PUMP_CURRENT, 60 * AVERAGE_PUMP_CURRENT, "normal"]
+                , [60 * AVERAGE_PUMP_CURRENT, 120 * AVERAGE_PUMP_CURRENT, "warn", "Pump run too long"]
+                , [120 * AVERAGE_PUMP_CURRENT, undefined, "alarm", "Pump run too long (alarm)"]
+            ]
+        });
+
+
+        // initialize other working variables
+
+        this.cycleStartDate = Date.now();   // beginning of cycle: OFF to ON
+        this.cycleWork = 0;
 
         this.cycles = new CircularBuffer(1000); // history of completed cycles: {start: <date/time>, run: <sec>})
         this.cycles.push({ date: Date.now(), runSec: 0 });  // dummy first completed cycle
@@ -144,36 +150,32 @@ class DeviceReadings {
     }
 
     /**
-     * Construct values to report in next SignalK delta
-     *
-     * @return {{}} --  leaf names and values in SignalK units.
-     *                  The actual SignalK path reported is @see Plugin.options.skRunStatsPath prepended to leaf name.
-     * @memberof DeviceReadings
-     */
-    deltaValues() {
-        const lastCycle = this.cycles.get(this.cycles.size() - 1);     //bugbug cb considers most recently pushed element to be at *end* of queue?
-        const retVal = {
-            'status': this.status,
-            'statusStart': dateToIntervalSec(this.edgeDate),
-            'cycleCount': this.cycleCount,
-            'runTime': toSec(this.runTimeMs),
-            'historyStart': dateToIntervalSec(this.historyDate),
-            'lastCycleStart': dateToIntervalSec(lastCycle.date),
-            'lastCycleRunTime': lastCycle.runSec,
-            //'moment': Date.now(),       // needed to calibrate all the xxStart values.
-            //'startsMs': { 'statusStart': this.edgeDate, 'historyStart': this.historyDate, 'lastCycleStart': lastCycle.date },
-        };
-        if (retVal.lastCycleStart)
-            return retVal;
+    * emit SK metadata delta suitable for insertion into baseDeltas.json
+    *
+    * @export
+    * @return {*} 
+    */
+    genDelta(basePath) {
+
+        let mv = []
+
+        pluginKeys.forEach(mk => {
+            mv.push({ path: `${basePath}.${mk.key}`, value: mk.metaGen() })
+        });
+
+        return { context: "vessels.self", updates: [{ meta: [mv] }] }
     }
+
 
 
     /**
      * Account for a new sample observation
      * If going from OFF to ON, start a new cycle.
-     * If going from ON to OFF, mark current cycle completed, add accumulated runTime to total runTime,
-     * Optimized so no calculations need to be done while the value is unchanged, only on the rising or falling edge.
-     *
+     * While ON (including first ON after OFF), accumulate 'since' stats
+     * If going from ON to OFF, mark current cycle completed, update 'last' cycle stats for newly-completed cycle,
+     * and log completed cycle.
+     * Optimized so no calculations need to be done for steady state OFF status.
+     * 
      * Rant about `.push()`:
      * We use @see CircularBuffer to store history of completed cycles.  When adding the most recently completed cycle to the history,
      * we use `.push()` rather than `.enq()`. This ensures that `.toarray()[0]` or `.get(0)` is the *oldest* item in history,
@@ -181,36 +183,55 @@ class DeviceReadings {
      * I suppose @see CircularBuffer is following the *bad* example of @see Array.prototype in having
      * `.push()` defined to append to the *end* of the buffer, but the CS101 definition of the operator is that
      * *enqueue* adds an element to the end of the buffer, so *push* should prepend to the beginning.
-     * Oh well, the fathers have eaten sour grapes and the children's teeth are set on edge.
+     * The fathers have eaten sour grapes and the children's teeth are set on edge.
      *
      *
-     * @param {*} sampleValue       - the observed value.  Any truthy value indicates device is ON.
-     * @param {Date} sampleDate     - the timestamp of the value (which, if pulled from a log, might not be "now")
-     * *                              So far, however, I can't figure out how to get the timestamp from the log, so
-     *                                the played-back data is shifted into the present time.
+     * @param {*} sampleValue       the observed value.  Any truthy value indicates device is ON.
+     * @param {Date} sampleDate     the timestamp of the value (which, if pulled from a log, might not be "now")
+     *                              So far, however, I can't figure out how to get the timestamp from the log, so
+     *                              the played-back data is shifted into the present time.
+     * @param {Number} prevValue    the last observed value
+     * @param {Date} prevValueDate  timestamp when last value was presented
      * @memberof DeviceReadings
      */
-    updateFromSample(sampleValue, sampleDate) {       // timestamp of new value (might be read from log)
+    updateFromSample(sampleValue, sampleDate, prevValue, prevValueDate) {       // timestamp of new value (might be read from log)
 
-        const truthy_sample = !!sampleValue;
+        assert(sampleValue instanceof Number);
 
-        if (truthy_sample != this.lastSample) {
-            if (truthy_sample) {
-                this.status = _device_status.ON;
-            } else {
-                this.status = _device_status.OFF;
-                const curRunMs = sampleDate - this.edgeDate;
-                this.cycleCount += 1;
-                this.runTimeMs += curRunMs;
+        if (Math.abs(sampleVal) <= this.config.NoiseMargin) {       // clip noise to zero.
+            sampleValue = 0.0;
+        };
+
+        if (sampleValue) {                  // pump *IS* running
+            if (!prevValue) {        // but it was not previously --> start new cycle
+                this.cycleWork = 0;
+                this.cycleStartDate = sampleDate;
+            }
+            // extend this cycle
+            const prevSampleInterval = sampleDate - prevValueDate;
+            const curWork = sampleVal * dateToSec(prevSampleInterval);  // assume constant effort since last sample
+
+            this.cycleWork += curWork;
+            this.sinceRunTime.value += prevSampleInterval;
+            this.sinceWork.value += curWork;
+            this.status.value = DeviceStatus.RUNNING;
+
+        } else {                            // pump *NOT* running
+            if (prevValue) {          // but it was previously --> record end of cycle
+                const curRunMs = sampleDate - this.cycleStartDate;
+
+                this.lastRunTime.value = sampleDate - this.cycleStartDate
+                this.lastWork.value = this.cycleWork;
+                this.sinceCycleCount.value += 1;
+
                 this.cycles.push({           // append latest cycle to *end* of log...
-                    date: this.edgeDate,
-                    runSec: toSec(curRunMs),
+                    date: timestamp(this.cycleStartDate),
+                    work: this.cycleWork,
+                    runSec: dateToSec(curRunMs),
                 });
             };
-
-            this.edgeDate = sampleDate;     // now we have a new edge to count from
-            this.lastSample = truthy_sample;  // lastSample is a boolean.
-        }
+            this.status.value = DeviceStatus.STOPPED;
+        };
     }
 
     /**
@@ -226,6 +247,20 @@ class DeviceReadings {
         this.edgeDate = sampleDate;
     }
 
+    /**
+     * Reset 'since' statistics
+     * 
+     * Eventually, add a POST to trigger this.
+     *
+     * @param {*} sampleDate
+     * @memberof DeviceReadings
+     */
+    resetSince(sampleDate) {
+        this.sinceCycleCount.value = 0;
+        this.sinceRunTime.value = 0;
+        this.sinceWork.value = 0;
+        this.since.value = sampleDate;
+    }
 
     /**
      * Restore checkpointed data, if possible
@@ -272,6 +307,8 @@ class DeviceHandler {
         this.config = config;
         this.id = _.camelCase(config.name);
 
+        this.status = "Starting";
+
         this.readings = new DeviceReadings();
         this.historyPath = `${this.skPlugin.dataDir}/${this.id}.dat`;
         this.readings.restore(this.historyPath);
@@ -283,10 +320,10 @@ class DeviceHandler {
         skPlugin.subscribeVal(this.skStream, this.onMonitorValue, this);
 
         this.lastSave = Date.now();
+        this.lastValue = 0;         //bugbug really shouldn't assume we know what type the value is.
         this.lastValueDate = Date.now();
         this.lastSKReportDate = Date.now();
         this.lastHeartbeatMs = Date.now();
-        this.status = "Starting";
         this.status = "Started";
     }
 
@@ -313,16 +350,16 @@ class DeviceHandler {
 
         assert.equal(this.status, "Started", "No heartbeat event till device handler fully started");
 
-        if (dateToIntervalSec(this.lastValueDate) >= this.config.secTimeout) {
+        if (dateToSec(Date.now() - this.lastValueDate) >= this.config.secTimeout) {
             this.readings.forceOffline(this.lastValueDate);
         };
 
-        if (dateToIntervalSec(this.lastSKReportDate) >= this.config.secReportInterval) {
+        if (dateToSec(Date.now() - this.lastSKReportDate) >= this.config.secReportInterval) {
             this.reportSK(nowMs);
             this.lastSKReportDate = nowMs;
         };
 
-        if (dateToIntervalSec(this.lastSave) > this.config.secCheckpoint) {
+        if (dateToSec(Date.now() - this.lastSave) > this.config.secCheckpoint) {
             this.readings.save(this.historyPath);
             this.lastSave = nowMs;
         }
@@ -343,8 +380,14 @@ class DeviceHandler {
         assert.equal(this.status, "Started", "No new input events till device handler fully started");
 
         this.skPlugin.debug(`onMonitorValue(${JSON.stringify(val)})`);
-        this.lastValueDate = Date.now();
-        this.readings.updateFromSample(val, Date.now());        // update readings and cyclecount history.
+        if (!(val instanceof Number)) {
+            val = (!!val) ? 1 : 0;      // if val is any kind of truthy, coerce to numeric 1, else 0.
+            this.skPlugin.debug(`Sample non-numeric, converting to ${val}`)
+        }
+        this.readings.updateFromSample(val, Date.now(), this.lastValue, this.lastValueDate);        // update readings and cyclecount history.
+        
+        this.lastValue = val;
+        this.lastValueDate = Date.now();        // remember last sample time for next time.        
     }
 
 
@@ -357,8 +400,10 @@ class DeviceHandler {
     reportSK(nowMs) {
         var values = [];
 
-        for (const [k, v] of Object.entries(this.readings.deltaValues())) {   //ugly k,v iteration!
-            values.push({ path: `${this.config.skRunStatsPath}.${k}`, value: v })
+        for (const sv in this) {
+            if (sv instanceof SkValue) {
+                values.push({ path: `${this.config.skRunStatsPath}.${sv.key}`, value: sv.toString() });
+            }
         }
 
         if (values.length > 0) {
