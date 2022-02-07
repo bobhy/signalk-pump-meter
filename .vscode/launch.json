@@ -6,6 +6,17 @@
     "configurations": [
 
         {
+            "name": "Jasmine favorite",
+            "request": "launch",
+            "program": "${workspaceRoot}/node_modules/.bin/jasmine",
+            "args": ["spec/plugin/deviceHandler-spec.js"],
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "type": "pwa-node",
+            "console": "integratedTerminal"
+        },
+        {
             "name": "Jasmine",
             "request": "launch",
             "program": "${workspaceRoot}/node_modules/.bin/jasmine",

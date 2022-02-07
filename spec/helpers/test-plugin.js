@@ -51,7 +51,8 @@ class TestPlugin {
                     skRunStatsPath: this.skRunStatsPath,
                     secTimeout: 20,
                     offsetHours: 0,
-                    secReportInterval: (this.heartbeatMs / 1000.0) //2
+                    secReportInterval: (this.heartbeatMs / 1000.0),
+                    noiseMargin: 0.01               //fixme need to duplicate any options defined in UOT plugin here.
                 }
             ]
         };
@@ -105,11 +106,10 @@ class TestPlugin {
         while (this.responses.length == 0) {
             //bugbug doesn't fail the test case or print anything unless the throw below is also executed.
             //bugbug expect(Date.now() - startWait).toBeLessThan(this.options.devices[0].secReportInterval*2*1000);
-            if ((Date.now() - startWait) >= this.options.devices[0].secReportInterval * 3 * 1000) {
+            if ((Date.now() - startWait) >= Math.max(1000, this.options.devices[0].secReportInterval * 3 * 1000)) {
                 throw 'timed out waiting for a response from plugin'
             }
             //this.app.debug('... waiting for a response from plugin...')
-            //this.mockClock.tick(499);
             await delay(this.heartbeatMs / 3);  // must wait a response period
         };
 
@@ -130,10 +130,12 @@ class TestPlugin {
         return rsp;
 
     }
-
     /**
-     * Retrieve (entire) plugin history
+     * shim to invoke @see DeviceHandler.getHistory().
      *
+     * @param {*} start
+     * @param {*} end
+     * @return {*} 
      * @memberof TestPlugin
      */
     getHistory(start, end) {

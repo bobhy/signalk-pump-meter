@@ -54,7 +54,7 @@ class DeviceStatus {
  * 
  */
 var DeviceStatus_all = [];
-DeviceStatus_all = Object.keys(DeviceStatus).forEach(f => DeviceStatus_all.push(f))
+Object.keys(DeviceStatus).forEach(f => DeviceStatus_all.push(f))
 DeviceStatus_all = Object.freeze(DeviceStatus_all); // whew!
 
 
@@ -70,11 +70,12 @@ class DeviceReadings {
     /**
      * Creates an instance of DeviceReadings.
      *
+     * @param {object} config Plugin config values.  Note these can change dynamically.
      * @memberof DeviceReadings
      */
-    constructor() {
+    constructor(config) {
 
-        //todo generate correct SK meta schema at runtime startup, until SkMeta API is fixed. DRY this out.
+        this.config = config;
 
         this.status = new SkValue('status', DeviceStatus.OFFLINE, {
             label: "Current status", enum: DeviceStatus_all,
@@ -92,24 +93,24 @@ class DeviceReadings {
             (v) => { return (new Date(v)).toISOString(); }
         );
 
-        this.sinceCycles = new SkValue('sinceCycles', {
+        this.sinceCycles = new SkValue('sinceCycles', 0, {
             label: "Run Cycles",
             description: "On-off duty cycles since statistics start"
         });
 
-        this.sinceRunTime = new SkValue('sinceRunTime', {
+        this.sinceRunTime = new SkValue('sinceRunTime', 0, {
             label: "Run Time", units: "s"
             , description: "Cumulative run time since statistics start"
         });
 
-        this.sinceWork = new SkValue('sinceWork', {
+        this.sinceWork = new SkValue('sinceWork', 0, {
             label: "Work", units: "C",
             description: "Cumulative work accomplished since statistics start in A.s (Coulombs).  Divide by 3600 for A.h."
         });
 
         // statistics updated per completed cycle (at end of cycle)
 
-        this.lastRunTime = new SkValue('lastRunTime', {
+        this.lastRunTime = new SkValue('lastRunTime', 0, {
             label: "Run Time", units: "s", scale: [0, 150]
             , description: "Runtime of last completed cycle"
             , range: [
@@ -124,7 +125,7 @@ class DeviceReadings {
 
         const AVERAGE_PUMP_CURRENT = 3;     // SWAG, average pump draw when running, used to set ranges
 
-        this.lastWork = new SkValue('lastWork', {
+        this.lastWork = new SkValue('lastWork', 0, {
             label: "Work", units: "C", scale: [0, 150]
             , description: "Work accomplished in last completed cycle"
             , range: [
@@ -196,9 +197,9 @@ class DeviceReadings {
      */
     updateFromSample(sampleValue, sampleDate, prevValue, prevValueDate) {       // timestamp of new value (might be read from log)
 
-        assert(sampleValue instanceof Number);
-
-        if (Math.abs(sampleVal) <= this.config.NoiseMargin) {       // clip noise to zero.
+       assert((typeof sampleValue) == 'number');
+       
+        if (Math.abs(sampleValue) <= this.config.noiseMargin) {       // clip noise to zero.
             sampleValue = 0.0;
         };
 
@@ -209,7 +210,7 @@ class DeviceReadings {
             }
             // extend this cycle
             const prevSampleInterval = sampleDate - prevValueDate;
-            const curWork = sampleVal * dateToSec(prevSampleInterval);  // assume constant effort since last sample
+            const curWork = sampleValue * dateToSec(prevSampleInterval);  // assume constant effort since last sample
 
             this.cycleWork += curWork;
             this.sinceRunTime.value += prevSampleInterval;
@@ -222,7 +223,7 @@ class DeviceReadings {
 
                 this.lastRunTime.value = sampleDate - this.cycleStartDate
                 this.lastWork.value = this.cycleWork;
-                this.sinceCycleCount.value += 1;
+                this.sinceCycles.value += 1;
 
                 this.cycles.push({           // append latest cycle to *end* of log...
                     date: timestamp(this.cycleStartDate),
@@ -243,7 +244,7 @@ class DeviceReadings {
      * @memberof DeviceReadings
      */
     forceOffline(sampleDate) {
-        this.status = _device_status.OFFLINE;
+        this.status.value = DeviceStatus.OFFLINE;
         this.edgeDate = sampleDate;
     }
 
@@ -256,7 +257,7 @@ class DeviceReadings {
      * @memberof DeviceReadings
      */
     resetSince(sampleDate) {
-        this.sinceCycleCount.value = 0;
+        this.sinceCycles.value = 0;
         this.sinceRunTime.value = 0;
         this.sinceWork.value = 0;
         this.since.value = sampleDate;
@@ -309,7 +310,7 @@ class DeviceHandler {
 
         this.status = "Starting";
 
-        this.readings = new DeviceReadings();
+        this.readings = new DeviceReadings(config);
         this.historyPath = `${this.skPlugin.dataDir}/${this.id}.dat`;
         this.readings.restore(this.historyPath);
 
@@ -380,7 +381,7 @@ class DeviceHandler {
         assert.equal(this.status, "Started", "No new input events till device handler fully started");
 
         this.skPlugin.debug(`onMonitorValue(${JSON.stringify(val)})`);
-        if (!(val instanceof Number)) {
+        if (typeof val != 'number') {
             val = (!!val) ? 1 : 0;      // if val is any kind of truthy, coerce to numeric 1, else 0.
             this.skPlugin.debug(`Sample non-numeric, converting to ${val}`)
         }
@@ -400,7 +401,7 @@ class DeviceHandler {
     reportSK(nowMs) {
         var values = [];
 
-        for (const sv in this) {
+        for (const [k, sv] of Object.entries(this.readings)) {
             if (sv instanceof SkValue) {
                 values.push({ path: `${this.config.skRunStatsPath}.${sv.key}`, value: sv.toString() });
             }
@@ -437,8 +438,8 @@ class DeviceHandler {
     /**
      * Get JSON values for a device history report
      *
-     * @param {*} start
-     * @param {*} end
+     * @param {string} start    Parsable date string for earliest date to retrieve (undefined to start with oldest record)
+     * @param {string} end      Parsable date string for latest date to retrieve (undefined to end with newest)
      * @return {*} Can be an error of form {status:nnn, msg:string} or an array of values
      * @memberof DeviceHandler
      */

@@ -23,9 +23,8 @@ class PumpMeterPlugin extends SignalKPlugin {
     });
     this.optInt({ propName: 'secReportInterval', title: 'Run data reporting interval (secs)', defaultVal: 30, longDescription: 'Number of seconds between each report of pump run data' });
     this.optInt({ propName: 'secTimeout', title: 'Pump signal timeout (secs)', defaultVal: 300, longDescription: 'Declare the device off if no signal received for this interval.' });
-    this.optNumber({ propName: 'noiseMargin', title: 'Noise margin', defaultVal: 0.010, 
-    longDescription: 'Range around zero to be considered zero for SkMonitorPath.' });
-    
+    this.optNum({ propName: 'noiseMargin', title: 'Noise margin', defaultVal: 0.010, longDescription: 'Range around zero to be considered zero for SkMonitorPath.' });
+
     // end of device properties
     this.optObjEnd();
 
@@ -50,7 +49,7 @@ class PumpMeterPlugin extends SignalKPlugin {
         if (device.skRunStatsPath === "") {
           device.skRunStatsPath = device.name;
         }
-        setImmediate( async () => { // do device handler initialization as async process
+        setImmediate(async () => { // do device handler initialization as async process
           let handler = new DeviceHandler(this, device);  // constructor can't be async
           if (handler.start) {
             await handler.start();    // do whatever long-running async the handler has.

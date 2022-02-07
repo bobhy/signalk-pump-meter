@@ -53,8 +53,8 @@ describe("Steady state behavior when nothing is changing", function () {
 
             expect(cur_time - prev_time).toBeLessThan(2.1 * reportIntervalMs);  // fudge factor for a few milliseconds difference
             expect(orig_rsp.lastCycleStart).toBeCloseTo(test_toSec(Date.now() - orig_time), TIME_PREC_MS);
-            expect(cur_rsp.cycleCount).toEqual(orig_rsp.cycleCount);  // cycle counts and accumulated run times don't chanve
-            expect(cur_rsp.runTime).toEqual(0);
+            expect(cur_rsp.sinceCycles).toEqual(orig_rsp.sinceCycles);  // cycle counts and accumulated run times don't chanve
+            expect(cur_rsp.sinceRunTime).toEqual(0);
 
             prev_time = cur_time;
         };
@@ -73,8 +73,8 @@ describe("During run of truthy values", function () {
             tp.sendTo(2);   // just to confirm it doesn't matter how many samples per heartbeat
             var cur_rsp = await tp.getFrom();
             var cur_time = Date.now();
-            expect(cur_rsp.cycleCount).toEqual(prev_rsp.cycleCount);
-            expect(cur_rsp.runTime).toEqual(prev_rsp.runTime);
+            expect(cur_rsp.sinceCycles).toEqual(prev_rsp.sinceCycles);
+            expect(cur_rsp.sinceRunTime).toEqual(prev_rsp.sinceRunTime);
             expect(cur_rsp.statusStart).toBeGreaterThan(prev_rsp.statusStart);
             expect(cur_rsp.statusStart).toBeCloseTo(test_toSec(Date.now() - orig_time), TIME_PREC_MS);
 
@@ -118,8 +118,8 @@ describe("At ON to OFF transition", function () {
         const at_off_moment = Date.now();
         const at_off_rsp = await tp.getFrom();
 
-        expect(at_off_rsp.cycleCount).toEqual(during_on_rsp.cycleCount + 1);
-        expect(at_off_rsp.cycleCount).toEqual(pre_on_rsp.cycleCount + 1);
+        expect(at_off_rsp.sinceCycles).toEqual(during_on_rsp.sinceCycles + 1);
+        expect(at_off_rsp.sinceCycles).toEqual(pre_on_rsp.sinceCycles + 1);
 
         // last cycle was just ended.  That means it *started* when the first OFF to ON was seen,
         // and that its duration was all the time ONs were seen (which is the same duration)
