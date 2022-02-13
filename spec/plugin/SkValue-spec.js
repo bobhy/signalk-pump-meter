@@ -3,6 +3,7 @@
 
 //const { newTestPlugin, TestPlugin, RevChron, delay, test_toSec, TIME_PREC, TIME_PREC_MS } = require("../helpers/test-plugin");
 
+const { random } = require('lodash');
 const { SkValue } = require('../../SkValue.js');
 
 const exp_keys = {    // key: [hasRange,]
@@ -23,70 +24,49 @@ describe("SkValue API", function () {
         expect(mk.value).toEqual(22);
         mk.value = 'argle bargle';
         expect(mk.value).toEqual('argle bargle');
-        //const mkm = mk.get_meta();
-        expect(mk.value).toEqual('argle bargle');
     });
-    it("for use in delta, emits current value as string by default", function () {
-        const mk = new SkValue("random_Key", 22);
-        expect(mk.toString()).toEqual('22');
-        const now = Date.now();
-        mk.value = now;
-        expect(mk.toString()).toEqual(now.toString());
-    });
-    it("for use in delta, can transform its value with user-specified function.", function () {
-        const mk = new SkValue("random_Key", 22, undefined, v => {
-            const nv = 2 * v;
-            return `I have been transformed to ${nv}.`
+    it("for use in delta, emits its .value, as a native value, by default", function () {
+        //todo it's ;a,e to have to invoke .value_formatter() conditionally and explicitly -- maybe override .valueOf()?
+        //todo but that's hard for initializer to provide closure that references the right 'this'.
+        var sv = new SkValue("random_Key", 22);
+        expect(sv.valueOf()).toEqual(22);
+        sv = new SkValue("random_Key", 22, undefined, v => {
+            return `I have been transformed to ${2 * v}.`
         });
-        expect(mk.toString()).toEqual("I have been transformed to 44.");
+        expect(sv.valueOf()).toEqual("I have been transformed to 44.");
     });
 });
 
 const exp_mykey_meta = {
-    label: "myKey label",
+    displayName: "myKey label",
     description: "Random my key description",
     units: "s",
-    scale: [-100, 100],
-    range: []
+    displayScale: [-100, 100],
+    zones: []
 };
 
-const exp_meta_keys = ['displayName', 'displayScale', 'description', 'zones', 'units']
-
 describe("SkValue metadata API", function () {
-    it("generates well-formed metadata", function () {
-        const emk = { ...exp_mykey_meta };
-        delete emk.scale;
-        const v = new SkValue("random_key", 22, emk);
-        const mv = v.get_meta();
-        expect(new Set(Object.keys(mv))).toEqual(new Set(
-            ['displayName', 'description', 'units']));
-        expect(mv.displayName).toEqual(exp_mykey_meta.label);
-        expect(mv.units).toEqual(exp_mykey_meta.units);
-        //expect(mv.displayScale).toEqual({lower: exp_mykey_meta.scale[0], type: 'linear', upper: exp_mykey_meta.scale[1]});
+    it("validates metadata initializer (to a limited extent)", function(){
+        expect(() => {
+            const sv = new SkValue('key', -2, {bogon: 'random', displayName: 'ok'});
+        }).toThrowError(/.*meta key.*/);
+
+        expect(() => {
+            const sv = new SkValue('key', -2, {units:'s', enum:['a','b'], displayName: 'ok'});
+        }).toThrowError(/.*units and enum.*/);
+
+        expect(new SkValue('key', -2, {description:'random', displayName: 'ok'})).toBeTruthy();
     });
-    it("validates the initializer", function () {
-        const mi = {label:'foo'}
-        expect(()=>{
-            return new SkValue('key', 22, {...mi, units:'s', enum:[]});
-        }).toThrowError(/.*units or enum.*/);
-        expect(()=>{
-            return new SkValue('key', 22, {...mi, enum:''});
-        }).toThrowError(/.*must be array.*/);
-     });
 
     it("allows enum to be specified", function () {
         const mi = {
-            label: 'foo',
+            displayName: 'foo',
             enum: ['first_value', 'second value', 22],
         };
         const v = new SkValue('key', 33, mi);
-        const mv = v.get_meta();
+        const mv = v.meta;
         expect(mv.enum).toEqual(mi.enum);
         expect('units' in mv).toBeFalse();
-
-        expect(() => {
-            return new SkValue('key', 44, { ...mi, units: 'C' })
-        }).toThrowError(TypeError);
     });
 
     xit("generates consistent zones", function () { 

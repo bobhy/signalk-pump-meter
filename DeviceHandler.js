@@ -79,7 +79,7 @@ class DeviceReadings {
         this.config = config;
 
         this.status = new SkValue('status', DeviceStatus.OFFLINE, {
-            label: "Current status", enum: DeviceStatus_all,
+            displayName: "Current status", enum: DeviceStatus_all,
             description: "Current status of device.  OFFLINE means no status report in 'too' long."
         },
         (thatVal) => {return thatVal.toString()}
@@ -90,26 +90,26 @@ class DeviceReadings {
         this.since = new SkValue('since',
             new Date(),
             {
-                label: "Statistics Start", units: "timestamp",
+                displayName: "Statistics Start", units: "timestamp",
                 description: "Cycles and runtime accumulated since this moment"
             },
             (thatVal) => { return thatVal.toISOString(); }
         );
 
         this.sinceCycles = new SkValue('sinceCycles', 0, {
-            label: "Run Cycles",
+            displayName: "Run Cycles",
             description: "On-off duty cycles since statistics start"
         });
 
         this.sinceRunTime = new SkValue('sinceRunTime', 0, {
-            label: "Run Time", units: "s"
+            displayName: "Run Time", units: "s"
             , description: "Cumulative run time since statistics start"
         });
 
         // statistics based on last completed cycle
 
         this.lastRunTime = new SkValue('lastRunTime', 0, {
-            label: "Last Run Time", units: "s", scale: [0, 150]
+            displayName: "Last Run Time", units: "s", scale: [0, 150]
             , description: "Runtime of last completed cycle"
             , zones: [
                 { lower: undefined, upper: 5, state: "alarm", message: "Run Time Alarm Low" },
@@ -125,7 +125,7 @@ class DeviceReadings {
         });
         const DAY_SEC = 24 * 60 * 60
         this.lastOffTime = new SkValue('lastOffTime', 0, {
-            label: "Last Off Time", units: "s", scale: [0, 8 * DAY_SEC]
+            displayName: "Last Off Time", units: "s", scale: [0, 8 * DAY_SEC]
             , description: "Time pump has been off since last completed cycle"
             , zones: [
                 { lower: undefined, upper: 0.33 * DAY_SEC, state: "alarm", message: "Time Between Cycles Alarm Low" },
@@ -142,12 +142,12 @@ class DeviceReadings {
 
         /* todo -- update meta zones to reflect long-term trends
         this.AvgRunTime = new SkValue('avgLastRunTime', 0, {
-            label: "Average Run Time per cycle", units: "s", scale: [0, 150]
+            displayName: "Average Run Time per cycle", units: "s", scale: [0, 150]
             , description: "Average runtime (see dayAveragingWindow)"
         });
 
         this.avgOffTime = new SkValue('avgOffTime', 0, {
-            label: "Avg Off Time", units: "s", scale: [0, 150]
+            displayName: "Avg Off Time", units: "s", scale: [0, 150]
             , description: "Average time pump has been off between cycles (see dayAveragingWindow)"
         });
         */
@@ -520,7 +520,7 @@ class DeviceHandler {
             if (sv instanceof SkValue) {
                 values.push({
                     key: sv.key,
-                    value: (sv.value_formatter && sv.value_formatter(sv.value)) || sv.value //todo clean up
+                    value: sv.valueOf()     // leverage custom transform for .value, if any.
                 })
             }
         }
