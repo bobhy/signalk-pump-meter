@@ -58,6 +58,7 @@ Object.keys(DeviceStatus).forEach(f => DeviceStatus_all.push(f))
 DeviceStatus_all = Object.freeze(DeviceStatus_all); // whew!
 
 
+
 /**
  * Device run time statistics
  * Since samples are collected (much?) more frequently than values are reported out, internal values optimized for efficient recording.
@@ -88,7 +89,7 @@ class DeviceReadings {
             Date.now(),
             {
                 label: "Statistics Start", units: "timestamp",
-                description: "cycles and runtime since this moment"
+                description: "Cycles and runtime accumulated since this moment"
             },
             (v) => { return (new Date(v)).toISOString(); }
         );
@@ -103,41 +104,51 @@ class DeviceReadings {
             , description: "Cumulative run time since statistics start"
         });
 
-        this.sinceWork = new SkValue('sinceWork', 0, {
-            label: "Work", units: "C",
-            description: "Cumulative work accomplished since statistics start in A.s (Coulombs).  Divide by 3600 for A.h."
-        });
-
-        // statistics updated per completed cycle (at end of cycle)
+        // statistics based on last completed cycle
 
         this.lastRunTime = new SkValue('lastRunTime', 0, {
-            label: "Run Time", units: "s", scale: [0, 150]
+            label: "Last Run Time", units: "s", scale: [0, 150]
             , description: "Runtime of last completed cycle"
-            , range: [
-                [undefined, 1, "alarm", "Pump run too short (alarm)"]
-                , [1, 7, "warn", "Pump run too short"]
-                , [7, 30, "nominal"]
-                , [7, 60, "normal"]
-                , [60, 120, "warn", "Pump run too long"]
-                , [120, undefined, "alarm", "Pump run too long (alarm)"]
+            , zones: [
+                { lower: undefined, upper: 5, state: "alarm", message: "Run Time Alarm Low" },
+                { lower: 5, upper: 10, state: "warn", message: "Run Time Warning Low" },
+                { lower: 10, upper: 15, state: "alert", message: "Run Time Low" },
+                { lower: 20, upper: 27, state: "normal", message: "" },
+                { lower: 27, upper: 32, state: "nominal", message: "" },
+                { lower: 32, upper: 35, state: "normal", message: "" },
+                { lower: 35, upper: 40, state: "alert", message: "Run Time High" },
+                { lower: 40, upper: 45, state: "warn", message: "Run Time Warning High" },
+                { lower: 45, upper: undefined, state: "alarm", message: "Run Time Alarm High" },
+            ]
+        });
+        const DAY_SEC = 24 * 60 * 60
+        this.lastOffTime = new SkValue('lastOffTime', 0, {
+            label: "Last Off Time", units: "s", scale: [0, 8 * DAY_SEC]
+            , description: "Time pump has been off since last completed cycle"
+            , zones: [
+                { lower: undefined, upper: 0.33 * DAY_SEC, state: "alarm", message: "Time Between Cycles Alarm Low" },
+                { lower: 0.33 * DAY_SEC, upper: 0.4 * DAY_SEC, state: "warn", message: "Time Between Cycles Warning Low" },
+                { lower: 0.4 * DAY_SEC, upper: 0.5 * DAY_SEC, state: "alert", message: "Time Between Cycles Low" },
+                { lower: 0.5 * DAY_SEC, upper: 1 * DAY_SEC, state: "normal", message: "" },
+                { lower: 1 * DAY_SEC, upper: 1 * DAY_SEC, state: "nominal", message: "" },
+                { lower: 1 * DAY_SEC, upper: 2 * DAY_SEC, state: "normal", message: "" },
+                { lower: 2 * DAY_SEC, upper: 2.5 * DAY_SEC, state: "alert", message: "Time Between Cycles High" },
+                { lower: 2.5 * DAY_SEC, upper: 4 * DAY_SEC, state: "warn", message: "Time Between Cycles Warning High" },
+                { lower: 7 * DAY_SEC, upper: undefined, state: "alarm", message: "Time Between Cycles Alarm High" },
             ]
         });
 
-        const AVERAGE_PUMP_CURRENT = 3;     // SWAG, average pump draw when running, used to set ranges
-
-        this.lastWork = new SkValue('lastWork', 0, {
-            label: "Work", units: "C", scale: [0, 150]
-            , description: "Work accomplished in last completed cycle"
-            , range: [
-                [undefined, AVERAGE_PUMP_CURRENT * 1, "alarm", "Pump run too short (alarm)"]
-                , [1 * AVERAGE_PUMP_CURRENT, 7 * AVERAGE_PUMP_CURRENT, "warn", "Pump run too short"]
-                , [7 * AVERAGE_PUMP_CURRENT, 30 * AVERAGE_PUMP_CURRENT, "nominal"]
-                , [7 * AVERAGE_PUMP_CURRENT, 60 * AVERAGE_PUMP_CURRENT, "normal"]
-                , [60 * AVERAGE_PUMP_CURRENT, 120 * AVERAGE_PUMP_CURRENT, "warn", "Pump run too long"]
-                , [120 * AVERAGE_PUMP_CURRENT, undefined, "alarm", "Pump run too long (alarm)"]
-            ]
+        /* todo -- update meta zones to reflect long-term trends
+        this.AvgRunTime = new SkValue('avgLastRunTime', 0, {
+            label: "Average Run Time per cycle", units: "s", scale: [0, 150]
+            , description: "Average runtime (see dayAveragingWindow)"
         });
 
+        this.avgOffTime = new SkValue('avgOffTime', 0, {
+            label: "Avg Off Time", units: "s", scale: [0, 150]
+            , description: "Average time pump has been off between cycles (see dayAveragingWindow)"
+        });
+        */
 
         // initialize other working variables
 
@@ -149,25 +160,6 @@ class DeviceReadings {
 
         //todo: establish checkpoint schedule, save live data t ofile every N sec.
     }
-
-    /**
-    * emit SK metadata delta suitable for insertion into baseDeltas.json
-    *
-    * @export
-    * @return {*} 
-    */
-    genDelta(basePath) {
-
-        let mv = []
-
-        pluginKeys.forEach(mk => {
-            mv.push({ path: `${basePath}.${mk.key}`, value: mk.metaGen() })
-        });
-
-        return { context: "vessels.self", updates: [{ meta: [mv] }] }
-    }
-
-
 
     /**
      * Account for a new sample observation
@@ -197,8 +189,8 @@ class DeviceReadings {
      */
     updateFromSample(sampleValue, sampleDate, prevValue, prevValueDate) {       // timestamp of new value (might be read from log)
 
-       assert((typeof sampleValue) == 'number');
-       
+        assert((typeof sampleValue) == 'number');
+
         if (Math.abs(sampleValue) <= this.config.noiseMargin) {       // clip noise to zero.
             sampleValue = 0.0;
         };
@@ -233,6 +225,16 @@ class DeviceReadings {
             };
             this.status.value = DeviceStatus.STOPPED;
         };
+    }
+
+
+    /**
+     * 
+     *
+     * @memberof DeviceReadings
+     */
+    buildDelta() {
+
     }
 
     /**
@@ -304,6 +306,7 @@ class DeviceHandler {
      * @memberof DeviceHandler
      */
     constructor(skPlugin, config) {
+        this._averageCounter = 0;
         this.skPlugin = skPlugin;
         this.config = config;
         this.id = _.camelCase(config.name);
@@ -356,7 +359,9 @@ class DeviceHandler {
         };
 
         if (dateToSec(Date.now() - this.lastSKReportDate) >= this.config.secReportInterval) {
-            this.reportSK(nowMs);
+            this.sendAllValues();
+            this.sendAllMeta();     //not here!
+            this.updateAveragesAndSend();
             this.lastSKReportDate = nowMs;
         };
 
@@ -386,19 +391,67 @@ class DeviceHandler {
             this.skPlugin.debug(`Sample non-numeric, converting to ${val}`)
         }
         this.readings.updateFromSample(val, Date.now(), this.lastValue, this.lastValueDate);        // update readings and cyclecount history.
-        
+
         this.lastValue = val;
         this.lastValueDate = Date.now();        // remember last sample time for next time.        
     }
-
-
     /**
-     * Construct and send a SignalK delta with current statistics from this device.
-     *
-     * @param {*} nowMs
+     * Update meta zones for lastRunTime and lastOffTime based on changes in the recent average
+     * First guess: adjust only the 'nominal' zone upper and lower: make it +/- 1 standard deviation
+     * with midpoint of the zone at the mean.
+     * But for now, a simple hack: double and halve the range, just to make something flash on the screen.
      * @memberof DeviceHandler
      */
-    reportSK(nowMs) {
+    updateAveragesAndSend() {
+        function magnify(factor, skv) { // returns [skv, newZones]
+            var zones = skv.meta.zones;
+
+            for (const z of zones) {
+                if (z.state == 'nominal') {
+                    if (z.lower) z.lower *= factor; // bound might be undefined!  
+                    if (z.upper) z.upper *= factor;
+                }
+            }
+            return [skv, zones];
+
+        }
+
+        switch (this._averageCounter % 4) {
+            case 0: // double the range
+                this.updateMeta(
+                    [magnify(2, this.readings.lastRunTime),
+                    magnify(2, this.readings.lastOffTime)]
+                );
+                break;
+            case 1: // halve the range
+                this.updateMeta(
+                    [magnify(0.5, this.readings.lastRunTime),
+                    magnify(0.5, this.readings.lastOffTime)]
+                );
+                break;
+            case 2: // halve the range
+                this.updateMeta(
+                    [magnify(0.5, this.readings.lastRunTime),
+                    magnify(0.5, this.readings.lastOffTime)]
+                );
+                break;
+            case 3: // double the range
+                this.updateMeta(
+                    [magnify(2, this.readings.lastRunTime),
+                    magnify(2, this.readings.lastOffTime)]
+                );
+                break;
+        };
+
+        this._averageCounter += 1;
+    }
+    /**
+     * Construct and send a SignalK delta with current metadata from this device.
+     *
+     * @param {*} item either a value or nowMs
+     * @memberof DeviceHandler
+     */
+    sendDelta(item) {
         var values = [];
 
         for (const [k, sv] of Object.entries(this.readings)) {
@@ -414,8 +467,101 @@ class DeviceHandler {
             this.skPlugin.debug('... suppressed trying to send an empty delta.')
         }
     }
+    /**
+     * Send a single SignalK Update message, which can contain either values or metadata
+     * @param {string} key is 'values' or 'meta'.  Accept no substitutes
+     * @param {[{path, value}]} values An array of one or more objects with each element
+     *   being in the format { path: "signal.k.path", value: "someValue" }.  
+     * Note object[i].value can be an object, especially when sending meta.
+     * @see #sendSK
+     */
+    sendSKUpdate(key, values) {
 
+        assert(key == 'meta' || key == 'values');
 
+        var delta = {
+            "updates": [
+                {
+                    "source": {
+                        "label": this.id,
+                    },
+                    "timestamp": new Date().toISOString()
+                }
+            ]
+        };
+
+        delta.updates[0][key] = values;
+
+        this.debug(`sending SignalK: ${JSON.stringify(delta, null, 2)}`);
+        this.app.handleMessage(this.id, delta);
+    }
+    /**
+     * Send an update containing *all* the device's current reading values.
+     *
+     * @memberof DeviceHandler
+     */
+    sendAllValues() {
+        const values = []
+        const keyPrefix = this.config.skRunStatsPath;
+
+        for (const [k, sv] of Object.entries(this.readings)) {
+            if (sv instanceof SkValue) {
+                values.push({
+                    key: keyPrefix + "." + sv.key,
+                    value: (sv.value_formatter && sv.value_formatter()) || sv.value.toString()
+                })
+            }
+        }
+
+        this.sendSKUpdate('value', values);
+    }
+
+    /**
+     * Send an update containing *all* the device's readings metadata.
+     *
+     * @memberof DeviceHandler
+     */
+    sendAllMeta() {
+        const values = []
+        const keyPrefix = this.config.skRunStatsPath;
+
+        for (const [k, sv] of Object.entries(this.readings)) {
+            if (sv instanceof SkValue) {
+                values.push({
+                    key: keyPrefix + "." + sv.key,
+                    value: sv.meta
+                });
+            }
+        }
+
+        this.sendSKUpdate('meta', values);
+    }
+    /**
+     * Update specified metadata properties of one or more readings, 
+     * then send an SK update of the changed properties.
+     *
+     * @param {[SkValue, newMeta], . . .] } skObjMeta   A list of 2-element lists:
+     * [skVal, newMeta], skVal - The reading statistic to update
+     * newMeta   An object containing the new metadata, in form {<metaKey>: <metaValue>}.
+     * Note that you must provide a *complete* new value for compound meta like `displayScale`
+     * and `zones`, it's not enough to change just one element of that value.
+     * @memberof DeviceHandler
+     */
+    updateMeta(skObjMeta) {
+
+        var values = [];
+
+        for (const [skValue, newMeta] of skObjMeta) {
+            assert(skValue instanceof SkValue);
+            Object.assign(skValue.meta, newMeta);
+            values.push({
+                path: `${this.config.skRunStatsPath}.${skValue.key}`,
+                value: newMeta
+            });
+        }
+
+        this.sendSKUpdate('meta', values);
+    }
 
     parseDate(dt) {
 
@@ -488,4 +634,4 @@ class DeviceHandler {
     }
 }
 
-module.exports = DeviceHandler;
+module.exports = [DeviceHandler];

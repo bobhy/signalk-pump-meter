@@ -25,6 +25,12 @@ class PumpMeterPlugin extends SignalKPlugin {
     this.optInt({ propName: 'secTimeout', title: 'Pump signal timeout (secs)', defaultVal: 300, longDescription: 'Declare the device off if no signal received for this interval.' });
     this.optNum({ propName: 'noiseMargin', title: 'Noise margin', defaultVal: 0.010, longDescription: 'Range around zero to be considered zero for SkMonitorPath.' });
 
+    this.optInt({ propName: 'secNominalRunTime', title: 'Default normal pump run time (secs)', defaultVal: 30, longDescription: 'Expected normal duration of pump run.' });
+    this.optInt({ propName: 'secNominalOffTime', title: 'Default normal pump time between runs (secs)', defaultVal: (24*60*60/2), longDescription: 'Expected normal time between pump runs (half a day).' });
+
+    this.optInt({ propName: 'dayAveragingWindow', title: 'Average statistics over this many days.', defaultVal: 7, longDescription: 'Window of time over which statistics are averaged.' });
+
+
     // end of device properties
     this.optObjEnd();
 

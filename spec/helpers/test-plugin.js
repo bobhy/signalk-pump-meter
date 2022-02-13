@@ -52,7 +52,10 @@ class TestPlugin {
                     secTimeout: 20,
                     offsetHours: 0,
                     secReportInterval: (this.heartbeatMs / 1000.0),
-                    noiseMargin: 0.01               //fixme need to duplicate any options defined in UOT plugin here.
+                    noiseMargin: 0.01,               //fixme need to duplicate any options defined in UOT plugin here.
+                    secNominalRunTIme: 30,
+                    secNominalOffTime: 24 * 60 * 60 / 2,
+                    dayAveragingWindow: 7,
                 }
             ]
         };

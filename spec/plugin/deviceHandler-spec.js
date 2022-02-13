@@ -38,7 +38,25 @@ describe("lifecycle of PumpMeterPlugin", function () {
     });
 });
 
-describe("Steady state behavior when nothing is changing", function () {
+
+describe("Behavior while pump not running", function(){
+    it("increments time since last run, doesn't change lastRunTime or since statistics ")
+});
+describe("Behavior when pump starts running and continues to run", function(){
+    it("ceases and retains time since last run, doesn't change lastRunTime and increments sinceRunTime");
+});
+describe("Behavior when pump stops running", function(){
+    it("snapshots lastRuntime, increments sinceCycles, then starts incrementing timeSinceLastRun, stops accumulating sinceRunTime")
+});
+describe("Behavior when pump statistics are reset", function(){
+    it("zeros since statistics, updates sinceTime to now");
+});
+
+describe("Managing the averages baseline", function(){
+    it("trims averages to configured window as it accumulates statistics");
+    it("pads average window with configured base value if actual history is too short");
+});
+xdescribe("Steady state behavior when nothing is changing", function () {
     it("generates responses every polling interval period describing same last edge", async function () {
         const tp = await newTestPlugin();
         tp.sendTo(0);
