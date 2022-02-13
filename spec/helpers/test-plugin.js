@@ -1,11 +1,11 @@
 // helpers for plugins testing.
-//fixme revisit to generate a good test history
 const Plugin = require('../../index.js');
 const MockApp = require('./mocks.js').MockApp;
 const tmp = require('tmp');
 tmp.setGracefulCleanup();   //todo how to make the tmp files disappear??
 //const jasmine = require('jasmine');
 const assert = require('assert').strict;
+const _ = require('lodash');
 
 const TIME_PREC = 0.5; // when comparing times, match to within 2 or 3 hundredths.  Jasmine *rounds* each value before comparing??!  takes fractional exponent?
 const TIME_PREC_MS = -0.5   // likewise when comparing millisecond values, match within 2-3 tens of milliseconds.
@@ -29,16 +29,12 @@ function test_toSec(msValue) {
  */
 class TestPlugin {
     deviceName = 'testPluginName';
-    plugin;
-    dataPath;
-    options;
-    app;
-    skMonitorPath = 'monitor.input';    // tbd -- does plugin insist on valid SK paths?
-    skRunStatsPath = 'results.path.1';
-    responses = [];
+    monPath = 'monitor.input';    // tbd -- does plugin insist on valid SK paths?
+    rsPath = 'results.path.1';
     heartbeatMs = 300;      // .toBeCloseTo() precision hacked till tests work for heartbeat [300, 2000].
-
+    
     constructor() {
+        const deviceId = _.camelCase(this.deviceName);      // there can be only one (for now).
         this.dataPath = tmp.dirSync().name;       // create temp directory and return name
         this.app = new MockApp(this.dataPath);
         this.plugin = new Plugin(this.app);
@@ -47,8 +43,9 @@ class TestPlugin {
             devices: [
                 {
                     name: this.deviceName,
-                    skMonitorPath: this.skMonitorPath,
-                    skRunStatsPath: this.skRunStatsPath,
+                    id: deviceId,
+                    skMonitorPath: this.monPath,
+                    skRunStatsPath: this.rsPath,
                     secTimeout: 20,
                     offsetHours: 0,
                     secReportInterval: (this.heartbeatMs / 1000.0),
@@ -60,13 +57,28 @@ class TestPlugin {
             ]
         };
 
-        this.responses = [];
+        this.deviceConfig = this.options.devices[0];    // plugin.getHandler not initialized yet.
+
+        this.deltaCount = 0;
+        this.responses = { values: {}, meta:{}};        // note, not [path:, value:], but {path: value}!
         this.lastDeltaReturned = Date.now();
 
         this.app.handleMessage = (id, delta) => {   // hotwire handleMessage
-            this.responses.push(delta);
-            if (this.responses.length > 2) {
-                var t = 1;
+            expect(delta.updates.length).toBe(1);
+            const duzed = delta.updates[0]; // we only deal with 1 update per delta.
+            expect(duzed.source.label).toBe(this.deviceConfig.id);
+            
+            const devicePathPrefix = this.deviceConfig.skRunStatsPath;
+            this.deltaCount += 1;
+
+            for (const type of ['values', 'meta']) {
+                if (type in duzed) {
+                    for (const v of duzed[type]) {
+                        expect(v.path.startsWith(devicePathPrefix)).toBeTrue();
+                        this.responses[type][v.path.slice(1 + devicePathPrefix.length)] = v.value;
+                        var t = 1;
+                    }
+                }
             }
         };
 
@@ -87,7 +99,7 @@ class TestPlugin {
         };
 
         vals.forEach(val => {
-            this.app.streambundle.pushMockValue(this.skMonitorPath, { value: val });
+            this.app.streambundle.pushMockValue(this.deviceConfig.skMonitorPath, { value: val });
         });
     }
 
@@ -102,36 +114,21 @@ class TestPlugin {
      */
     async getFrom() {
 
-        this.responses = [];    //experiment force a heartbeat delay
+        await delay(1000 * this.deviceConfig.secReportInterval);    //experiment wait till next delta emitted.
 
         const startWait = Date.now();
+        const startDeltaCount = this.deltaCount;
 
-        while (this.responses.length == 0) {
+        while (this.deltaCount <= startDeltaCount) {
             //bugbug doesn't fail the test case or print anything unless the throw below is also executed.
-            //bugbug expect(Date.now() - startWait).toBeLessThan(this.options.devices[0].secReportInterval*2*1000);
-            if ((Date.now() - startWait) >= Math.max(1000, this.options.devices[0].secReportInterval * 3 * 1000)) {
+            if ((Date.now() - startWait) >= Math.max(1000, this.deviceConfig.secReportInterval * 3 * 1000)) {
                 throw 'timed out waiting for a response from plugin'
             }
             //this.app.debug('... waiting for a response from plugin...')
-            await delay(this.heartbeatMs / 3);  // must wait a response period
+            await delay(this.heartbeatMs);  // must wait a response period
         };
 
-        const r_updates = this.responses[this.responses.length - 1].updates;
-        const ru_values = r_updates[r_updates.length - 1].values;    // throw away older responses, return last.
-
-        const rsp = {};
-        const devicePathPrefix = this.plugin.getHandler(this.deviceName).config.skRunStatsPath;
-
-        for (const pv of ru_values) {
-            const last_dot_pos = pv.path.lastIndexOf('.');
-            expect(pv.path.substring(0, last_dot_pos)).toEqual(devicePathPrefix);
-            rsp[pv.path.substring(last_dot_pos + 1)] = pv.value;
-        }
-
-        this.responses = [];    // make room immediately to start collecting a new asynchronous response...
-
-        return rsp;
-
+        return this.responses;
     }
     /**
      * shim to invoke @see DeviceHandler.getHistory().

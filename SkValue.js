@@ -12,7 +12,8 @@ class SkValue {
      * @param {string} key key of the value in SK delta
      * @param {*} init_value initial value
      * @param {Object} init_meta initial metadata as defined in [SK Meta Spec](https://signalk.org/specification/1.5.0/doc/data_model_metadata.html)
-     * @param {*} value_formatter function of one parameter, return value to be emitted in SK delta.
+     * @param {*} value_formatter function populate value key in SK delta.
+     * Function of one parameter, the current internal .value.
      * @memberof SkValue
      */
     constructor(key, init_value, init_meta, value_formatter) {
@@ -20,19 +21,6 @@ class SkValue {
         this.value = init_value;
         this.meta = init_meta;
         this.value_formatter = value_formatter;
-    }
-
-
-    /**
-     * serialize value into SignalK delta
-     *
-     * If this.value_formatter is defined, it is invoked with the current value and its (string) value is returned.
-     *
-     * * @return {string} 
-     * @memberof SkValue
-     */
-    toString() {
-        return (this.value_formatter === undefined) ? this.value.toString() : this.value_formatter(this.value);
     }
 
     /**

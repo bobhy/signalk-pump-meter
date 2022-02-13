@@ -50,13 +50,15 @@ class PumpMeterPlugin extends SignalKPlugin {
     this.handlers = [];
 
     for (var device of this.options.devices) {
-      if (device.name && device.skMonitorPath) {
-        this.debug(`Configuring device ${device.name}`);
+      if (!device.name || !device.skMonitorPath) {
+        this.debug(`Can't configure device '${device.name}' -- name or skMonitorPath missing.`)
+      } else {
         if (device.skRunStatsPath === "") {
           device.skRunStatsPath = device.name;
         }
         setImmediate(async () => { // do device handler initialization as async process
           let handler = new DeviceHandler(this, device);  // constructor can't be async
+          this.debug(`Configuring device ${device.id}`);  // use canonic form of device name        
           if (handler.start) {
             await handler.start();    // do whatever long-running async the handler has.
           };

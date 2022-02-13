@@ -81,17 +81,19 @@ class DeviceReadings {
         this.status = new SkValue('status', DeviceStatus.OFFLINE, {
             label: "Current status", enum: DeviceStatus_all,
             description: "Current status of device.  OFFLINE means no status report in 'too' long."
-        });
+        },
+        (thatVal) => {return thatVal.toString()}
+        );
 
         // statistics accumulated from a resettable starting point in time
 
         this.since = new SkValue('since',
-            Date.now(),
+            new Date(),
             {
                 label: "Statistics Start", units: "timestamp",
                 description: "Cycles and runtime accumulated since this moment"
             },
-            (v) => { return (new Date(v)).toISOString(); }
+            (thatVal) => { return thatVal.toISOString(); }
         );
 
         this.sinceCycles = new SkValue('sinceCycles', 0, {
@@ -152,11 +154,11 @@ class DeviceReadings {
 
         // initialize other working variables
 
-        this.cycleStartDate = Date.now();   // beginning of cycle: OFF to ON
+        this.cycleStartDate = new Date();   // beginning of cycle: OFF to ON
         this.cycleWork = 0;
 
         this.cycles = new CircularBuffer(1000); // history of completed cycles: {start: <date/time>, run: <sec>})
-        this.cycles.push({ date: Date.now(), runSec: 0 });  // dummy first completed cycle
+        this.cycles.push({ date: (new Date()), runSec: 0 });  // dummy first completed cycle
 
         //todo: establish checkpoint schedule, save live data t ofile every N sec.
     }
@@ -199,14 +201,14 @@ class DeviceReadings {
             if (!prevValue) {        // but it was not previously --> start new cycle
                 this.cycleWork = 0;
                 this.cycleStartDate = sampleDate;
+                                                    //bugbug update 'lastOffTime`
             }
-            // extend this cycle
+            // anyway, it's running now: extend this cycle
             const prevSampleInterval = sampleDate - prevValueDate;
             const curWork = sampleValue * dateToSec(prevSampleInterval);  // assume constant effort since last sample
 
             this.cycleWork += curWork;
             this.sinceRunTime.value += prevSampleInterval;
-            this.sinceWork.value += curWork;
             this.status.value = DeviceStatus.RUNNING;
 
         } else {                            // pump *NOT* running
@@ -214,12 +216,10 @@ class DeviceReadings {
                 const curRunMs = sampleDate - this.cycleStartDate;
 
                 this.lastRunTime.value = sampleDate - this.cycleStartDate
-                this.lastWork.value = this.cycleWork;
                 this.sinceCycles.value += 1;
 
                 this.cycles.push({           // append latest cycle to *end* of log...
                     date: timestamp(this.cycleStartDate),
-                    work: this.cycleWork,
                     runSec: dateToSec(curRunMs),
                 });
             };
@@ -302,38 +302,38 @@ class DeviceHandler {
     /**
      * Creates an instance of DeviceHandler.
      * @param {*} skPlugin
-     * @param {*} config - plugin config object
+     * @param {*} deviceConfig - plugin config object
      * @memberof DeviceHandler
      */
-    constructor(skPlugin, config) {
+    constructor(skPlugin, deviceConfig) {
         this._averageCounter = 0;
         this.skPlugin = skPlugin;
-        this.config = config;
-        this.id = _.camelCase(config.name);
+        this.deviceConfig = deviceConfig;
+        this.id = _.camelCase(deviceConfig.name);       // the canonic form of name, use this instead of name
 
         this.status = "Starting";
 
-        this.readings = new DeviceReadings(config);
+        this.readings = new DeviceReadings(deviceConfig);
         this.historyPath = `${this.skPlugin.dataDir}/${this.id}.dat`;
         this.readings.restore(this.historyPath);
 
         // when device handler ready, arm the listener event.
         // unseen here, but on return from this constructor, plugin will arm the heartbeat event.
 
-        this.skStream = skPlugin.getSKValues(config.skMonitorPath);
+        this.skStream = skPlugin.getSKValues(deviceConfig.skMonitorPath);
         skPlugin.subscribeVal(this.skStream, this.onMonitorValue, this);
 
-        this.lastSave = Date.now();
+        this.lastSave = new Date();
         this.lastValue = 0;         //bugbug really shouldn't assume we know what type the value is.
-        this.lastValueDate = Date.now();
-        this.lastSKReportDate = Date.now();
-        this.lastHeartbeatMs = Date.now();
+        this.lastValueDate = new Date();
+        this.lastSKReportDate = new Date();
+        this.lastHeartbeatMs = new Date();
         this.status = "Started";
     }
 
 
     stop() {
-        this.skPlugin.debug(`Stopping ${this.config.name}`);
+        this.skPlugin.debug(`Stopping ${this.deviceConfig.id}`);
         this.readings.save(this.historyPath);
         this.status = "Stopped";
     }
@@ -354,18 +354,18 @@ class DeviceHandler {
 
         assert.equal(this.status, "Started", "No heartbeat event till device handler fully started");
 
-        if (dateToSec(Date.now() - this.lastValueDate) >= this.config.secTimeout) {
+        if (dateToSec(new Date() - this.lastValueDate) >= this.deviceConfig.secTimeout) {
             this.readings.forceOffline(this.lastValueDate);
         };
 
-        if (dateToSec(Date.now() - this.lastSKReportDate) >= this.config.secReportInterval) {
+        if (dateToSec(new Date() - this.lastSKReportDate) >= this.deviceConfig.secReportInterval) {
             this.sendAllValues();
             this.sendAllMeta();     //not here!
             this.updateAveragesAndSend();
             this.lastSKReportDate = nowMs;
         };
 
-        if (dateToSec(Date.now() - this.lastSave) > this.config.secCheckpoint) {
+        if (dateToSec(new Date() - this.lastSave) > this.deviceConfig.secCheckpoint) {
             this.readings.save(this.historyPath);
             this.lastSave = nowMs;
         }
@@ -390,10 +390,10 @@ class DeviceHandler {
             val = (!!val) ? 1 : 0;      // if val is any kind of truthy, coerce to numeric 1, else 0.
             this.skPlugin.debug(`Sample non-numeric, converting to ${val}`)
         }
-        this.readings.updateFromSample(val, Date.now(), this.lastValue, this.lastValueDate);        // update readings and cyclecount history.
+        this.readings.updateFromSample(val, new Date(), this.lastValue, this.lastValueDate);        // update readings and cyclecount history.
 
         this.lastValue = val;
-        this.lastValueDate = Date.now();        // remember last sample time for next time.        
+        this.lastValueDate = new Date();        // remember last sample time for next time.        
     }
     /**
      * Update meta zones for lastRunTime and lastOffTime based on changes in the recent average
@@ -451,6 +451,7 @@ class DeviceHandler {
      * @param {*} item either a value or nowMs
      * @memberof DeviceHandler
      */
+    j/*
     sendDelta(item) {
         var values = [];
 
@@ -467,19 +468,23 @@ class DeviceHandler {
             this.skPlugin.debug('... suppressed trying to send an empty delta.')
         }
     }
+    */
     /**
      * Send a single SignalK Update message, which can contain either values or metadata
-     * @param {string} key is 'values' or 'meta'.  Accept no substitutes
+     * @param {string} type is 'values' or 'meta'.  Accept no substitutes
      * @param {[{path, value}]} values An array of one or more objects with each element
      *   being in the format { path: "signal.k.path", value: "someValue" }.  
      * Note object[i].value can be an object, especially when sending meta.
      * @see #sendSK
      */
-    sendSKUpdate(key, values) {
+    sendSKUpdate(type, values) {
 
-        assert(key == 'meta' || key == 'values');
+        //if (!(type in ['meta', 'values'])){
+        //    var t = 1;
+        //};
 
         var delta = {
+            //bugbug determine whether the delta should have 'context: <reference to self>
             "updates": [
                 {
                     "source": {
@@ -490,10 +495,17 @@ class DeviceHandler {
             ]
         };
 
-        delta.updates[0][key] = values;
+        const dv = [];
+        for (const v of values) {
+            dv.push({
+                path: this.deviceConfig.skRunStatsPath + '.' + v.key,
+                value: v.value
+            });
+        }
+        delta.updates[0][type] = dv;
 
-        this.debug(`sending SignalK: ${JSON.stringify(delta, null, 2)}`);
-        this.app.handleMessage(this.id, delta);
+        this.skPlugin.debug(`sending SignalK: ${JSON.stringify(delta, null, 2)}`);
+        this.skPlugin.app.handleMessage(this.id, delta);
     }
     /**
      * Send an update containing *all* the device's current reading values.
@@ -502,18 +514,18 @@ class DeviceHandler {
      */
     sendAllValues() {
         const values = []
-        const keyPrefix = this.config.skRunStatsPath;
+        const keyPrefix = this.deviceConfig.skRunStatsPath;
 
         for (const [k, sv] of Object.entries(this.readings)) {
             if (sv instanceof SkValue) {
                 values.push({
-                    key: keyPrefix + "." + sv.key,
-                    value: (sv.value_formatter && sv.value_formatter()) || sv.value.toString()
+                    key: sv.key,
+                    value: (sv.value_formatter && sv.value_formatter(sv.value)) || sv.value //todo clean up
                 })
             }
         }
 
-        this.sendSKUpdate('value', values);
+        this.sendSKUpdate('values', values);
     }
 
     /**
@@ -522,13 +534,12 @@ class DeviceHandler {
      * @memberof DeviceHandler
      */
     sendAllMeta() {
-        const values = []
-        const keyPrefix = this.config.skRunStatsPath;
+        const values = [];
 
         for (const [k, sv] of Object.entries(this.readings)) {
             if (sv instanceof SkValue) {
                 values.push({
-                    key: keyPrefix + "." + sv.key,
+                    key: sv.key,
                     value: sv.meta
                 });
             }
@@ -555,29 +566,12 @@ class DeviceHandler {
             assert(skValue instanceof SkValue);
             Object.assign(skValue.meta, newMeta);
             values.push({
-                path: `${this.config.skRunStatsPath}.${skValue.key}`,
+                key: skValue.key,
                 value: newMeta
             });
         }
 
         this.sendSKUpdate('meta', values);
-    }
-
-    parseDate(dt) {
-
-        switch (dt.constructor.name) {
-            case 'Number':
-                return dt;
-            //case 'Date':              // actual external API will never present this type
-            //    return dt.getTime();
-            default:
-                const rv = Date.parse(dt);
-                if (!rv) {
-                    throw `Can't parse ${dt} as date/time`
-                } else {
-                    return rv;
-                };
-        };
     }
 
 
@@ -592,14 +586,14 @@ class DeviceHandler {
     getHistory(start, end) {
         assert.equal(this.status, "Started", "No API calls till device handler fully started");
 
-        this.skPlugin.debug(`${this.config.name} history request for ${start} thru ${end}`);
+        this.skPlugin.debug(`${this.deviceConfig.id} history request for ${start} thru ${end}`);
 
         var startRange;
         var endRange;
 
         try {
-            startRange = (start == undefined) ? 0 : this.parseDate(start);
-            endRange = (end == undefined) ? Date.now() : this.parseDate(end);
+            startRange = new Date( start || 0);
+            endRange = (end == undefined) ? new Date() : new Date(end);
         } catch (e) {
             return { status: 400, msg: e }; // http status 400 Bad Request
         };
@@ -634,4 +628,4 @@ class DeviceHandler {
     }
 }
 
-module.exports = [DeviceHandler];
+module.exports = DeviceHandler;
