@@ -48,7 +48,7 @@ class TestPlugin {
                     skRunStatsPath: this.rsPath,
                     secTimeout: 20,
                     offsetHours: 0,
-                    secReportInterval: (this.heartbeatMs / 1000.0),
+                    secReportInterval: 2 * (this.heartbeatMs / 1000.0), // .getFrom protocol needs > 1 heartbeat.
                     noiseMargin: 0.01,               //fixme need to duplicate any options defined in UOT plugin here.
                     secNominalRunTIme: 30,
                     secNominalOffTime: 24 * 60 * 60 / 2,
@@ -76,6 +76,9 @@ class TestPlugin {
                     for (const v of duzed[type]) {
                         expect(v.path.startsWith(devicePathPrefix)).toBeTrue();
                         this.responses[type][v.path.slice(1 + devicePathPrefix.length)] = v.value;
+                        if (type == 'values' && v.path.endsWith('status')) {
+                            var t = 1;
+                        }
                         var t = 1;
                     }
                 }
@@ -139,7 +142,7 @@ class TestPlugin {
      * @memberof TestPlugin
      */
     getHistory(start, end) {
-        var history = this.plugin.getHandler(this.deviceName).getHistory(start, end);   //bugbug -- this.pluginDeviceName same for all devices!
+        var history = this.plugin.getHandler(this.deviceName).getHistory(start, end);
         //this.app.debug(JSON.stringify(history, null, 2));
         return history;
     }

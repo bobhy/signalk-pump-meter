@@ -92,6 +92,7 @@ xdescribe("Steady state behavior when nothing is changing", function () {
 describe("During run of truthy values", function () {
     it("extends current status duration, but doesn't increase aggregate run time or cycle count", async function () {
         const tp = await newTestPlugin();
+        var first_rsp = await tp.getFrom();
         tp.sendTo(0);
         var prev_rsp = await tp.getFrom();
         expect(prev_rsp.values.status).toEqual('STOPPED');

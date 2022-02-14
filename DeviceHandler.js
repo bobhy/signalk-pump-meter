@@ -16,7 +16,7 @@ const Data = require('dataclass').Data;
  * @return {number}  Same value in SK-(== SI standard) time units (seconds). Value has 3 decimal places (milliseconds) for testability with sub-second heartbeat.
  */
 function dateToSec(msValue) {
-    return Math.round(msValue * 1000.0) / 1000.0;
+    return msValue / 1000.0 //bugbug Math.round(msValue * 1000.0) / 1000.0;
 }
 
 /**
@@ -109,7 +109,7 @@ class DeviceReadings {
         // statistics based on last completed cycle
 
         this.lastRunTime = new SkValue('lastRunTime', 0, {
-            displayName: "Last Run Time", units: "s", scale: [0, 150]
+            displayName: "Last Run Time", units: "s", displayScale: [0, 150]
             , description: "Runtime of last completed cycle"
             , zones: [
                 { lower: undefined, upper: 5, state: "alarm", message: "Run Time Alarm Low" },
@@ -125,7 +125,7 @@ class DeviceReadings {
         });
         const DAY_SEC = 24 * 60 * 60
         this.lastOffTime = new SkValue('lastOffTime', 0, {
-            displayName: "Last Off Time", units: "s", scale: [0, 8 * DAY_SEC]
+            displayName: "Last Off Time", units: "s", displayScale: [0, 8 * DAY_SEC]
             , description: "Time pump has been off since last completed cycle"
             , zones: [
                 { lower: undefined, upper: 0.33 * DAY_SEC, state: "alarm", message: "Time Between Cycles Alarm Low" },
@@ -142,12 +142,12 @@ class DeviceReadings {
 
         /* todo -- update meta zones to reflect long-term trends
         this.AvgRunTime = new SkValue('avgLastRunTime', 0, {
-            displayName: "Average Run Time per cycle", units: "s", scale: [0, 150]
+            displayName: "Average Run Time per cycle", units: "s", displayScale: [0, 150]
             , description: "Average runtime (see dayAveragingWindow)"
         });
 
         this.avgOffTime = new SkValue('avgOffTime', 0, {
-            displayName: "Avg Off Time", units: "s", scale: [0, 150]
+            displayName: "Avg Off Time", units: "s", displayScale: [0, 150]
             , description: "Average time pump has been off between cycles (see dayAveragingWindow)"
         });
         */
@@ -192,8 +192,9 @@ class DeviceReadings {
     updateFromSample(sampleValue, sampleDate, prevValue, prevValueDate) {       // timestamp of new value (might be read from log)
 
         assert((typeof sampleValue) == 'number');
+        //todo why? assert((sampleDate - prevValueDate > 0), `updateFromSample, sampleDate diff ${sampleDate - prevValueDate} not > 0`);
 
-        if (Math.abs(sampleValue) <= this.config.noiseMargin) {       // clip noise to zero.
+        if (sampleValue && (Math.abs(sampleValue) <= this.config.noiseMargin)) {       // clip noise to zero.
             sampleValue = 0.0;
         };
 
@@ -225,16 +226,6 @@ class DeviceReadings {
             };
             this.status.value = DeviceStatus.STOPPED;
         };
-    }
-
-
-    /**
-     * 
-     *
-     * @memberof DeviceReadings
-     */
-    buildDelta() {
-
     }
 
     /**
@@ -342,33 +333,36 @@ class DeviceHandler {
     /**
      * Invoked on heartbeat event (e.g every 2 sec)
      *
-     * @param {*} timer -- timer event
+     * @param {*} nowMs -- timer event
      * @memberof DeviceHandler
      */
     onHeartbeat(nowMs) {
         //this.skPlugin.debug(`onHeartbeat(${JSON.stringify(timer)})`);
         //fixme <timer> is a valid date/time, but does it match timestamp if data is played back from file?
 
-        assert(this.lastHeartbeatMs < nowMs, `No back-to-back heartbeats.  Detected interval is: ${nowMs - this.lastHeartbeatMs}.`);
-        this.lastHeartbeatMs = nowMs;
-
         assert.equal(this.status, "Started", "No heartbeat event till device handler fully started");
-
-        if (dateToSec(new Date() - this.lastValueDate) >= this.deviceConfig.secTimeout) {
-            this.readings.forceOffline(this.lastValueDate);
+        
+        assert( Math.abs((Date.now() - nowMs)) < 60*60*1000, `OnHeartBeat: event time ${nowMs} not near current time ${Date.now()}`);
+        assert(this.lastHeartbeatMs < nowMs, `No back-to-back heartbeats.  Detected interval is: ${nowMs - this.lastHeartbeatMs}.`);
+        
+        if (dateToSec(nowMs - this.lastValueDate) >= this.deviceConfig.secTimeout) {
+            this.readings.forceOffline(nowMs);
         };
 
-        if (dateToSec(new Date() - this.lastSKReportDate) >= this.deviceConfig.secReportInterval) {
+        if (dateToSec(nowMs - this.lastSKReportDate) >= this.deviceConfig.secReportInterval) {
             this.sendAllValues();
             this.sendAllMeta();     //not here!
             this.updateAveragesAndSend();
             this.lastSKReportDate = nowMs;
         };
 
-        if (dateToSec(new Date() - this.lastSave) > this.deviceConfig.secCheckpoint) {
+        if (dateToSec(nowMs - this.lastSave) > this.deviceConfig.secCheckpoint) {
             this.readings.save(this.historyPath);
             this.lastSave = nowMs;
         }
+
+        this.lastHeartbeatMs = nowMs;
+        
     }
 
 
@@ -445,30 +439,7 @@ class DeviceHandler {
 
         this._averageCounter += 1;
     }
-    /**
-     * Construct and send a SignalK delta with current metadata from this device.
-     *
-     * @param {*} item either a value or nowMs
-     * @memberof DeviceHandler
-     */
-    j/*
-    sendDelta(item) {
-        var values = [];
-
-        for (const [k, sv] of Object.entries(this.readings)) {
-            if (sv instanceof SkValue) {
-                values.push({ path: `${this.config.skRunStatsPath}.${sv.key}`, value: sv.toString() });
-            }
-        }
-
-        if (values.length > 0) {
-            this.skPlugin.sendSKValues(values);
-        }
-        else {
-            this.skPlugin.debug('... suppressed trying to send an empty delta.')
-        }
-    }
-    */
+    
     /**
      * Send a single SignalK Update message, which can contain either values or metadata
      * @param {string} type is 'values' or 'meta'.  Accept no substitutes
@@ -588,14 +559,11 @@ class DeviceHandler {
 
         this.skPlugin.debug(`${this.deviceConfig.id} history request for ${start} thru ${end}`);
 
-        var startRange;
-        var endRange;
+        var startRange = new Date( start || 0);
+        var endRange = (end == undefined) ? new Date() : new Date(end);
 
-        try {
-            startRange = new Date( start || 0);
-            endRange = (end == undefined) ? new Date() : new Date(end);
-        } catch (e) {
-            return { status: 400, msg: e }; // http status 400 Bad Request
+        if (isNaN(endRange - startRange)) {
+            return {status: 400, msg:`invalid date range [${start}, ${end}]`};
         };
 
         let res = [];

@@ -32,11 +32,11 @@ describe("History API", function () {
         // various ill formed requests
         retVal = this.tp.getHistory("foo");
         expect(retVal.status).toEqual(400);
-        expect(retVal.msg).toContain("Can't parse");
+        expect(retVal.msg).toContain("invalid date range");
 
         retVal = this.tp.getHistory(0, "bar");
         expect(retVal.status).toEqual(400);
-        expect(retVal.msg).toContain("Can't parse");
+        expect(retVal.msg).toContain("invalid date range");
     });
 
     it("Defaults start or end if not provided", function () {
