@@ -1,6 +1,8 @@
 // tests for pump meter plugin and basic operation
 
-const { newTestPlugin, TestPlugin,delay, test_toSec, TIME_PREC, TIME_PREC_MS } = require("../helpers/test-plugin");
+const { newTestPlugin, TestPlugin, delay, test_toSec, TIME_PREC, TIME_PREC_MS } = require("../helpers/test-plugin");
+const { DeviceStatus } = require("../../DeviceHandler");
+const { toPlainObject } = require("lodash");
 
 jasmine.DEFAULT_TIMEOUT_INTERVAL = 100000;
 
@@ -130,7 +132,7 @@ describe("verify sendTo / getFrom protocol used for testing synchronization", fu
 
         tp.sendTo(0);        // get something going
 
-        for (var i =0 ; i < 5; i++) {
+        for (var i = 0; i < 5; i++) {
             const rsp = await tp.getMetaFrom(true);
             expect('meta' in rsp).toBeTrue();
             expect('values' in rsp).toBeFalse();
@@ -199,11 +201,16 @@ describe("At ON to OFF transition", function () {
 
         tp.sendTo(0);       // make sure it's off
 
-        const at_on_moment = Date.now();
+        const on_moment = Date.now();
 
         for (var i = 0; i < 3; i++) {
             tp.sendTo(10);      // continue on
-            prev_rsp = await tp.getFrom();
+            prev_rsp = await tp.getFrom();  // first delta after ON might not show increase in sinceRunTime.
+            expect(prev_rsp.values.status).toEqual(DeviceStatus.RUNNING.toString());
+
+            tp.sendTo(20);
+
+            prev_rsp = await tp.getFrom();  // but the second one should.
 
             // during ON status, the "lastCycle" reported is unchanged.
             expect(pre_on_rsp.values.lastRunTime).toEqual(prev_rsp.values.lastRunTime);
@@ -216,14 +223,14 @@ describe("At ON to OFF transition", function () {
         // now terminate this duty cycle with a "0" sample.
 
         tp.sendTo(0);       // terminate this duty cycle
-        const at_off_moment = Date.now();
-        const at_off_rsp = await tp.getFrom();
+        const off_moment = Date.now();
+        const off_rsp = await tp.getFrom();
 
-        expect(at_off_rsp.values.sinceCycles).toEqual(last_on_rsp.values.sinceCycles + 1);
+        expect(off_rsp.values.sinceCycles).toEqual(last_on_rsp.values.sinceCycles + 1);
 
         // last cycle was just ended.  That means it *started* when the first OFF to ON was seen,
         // and that its duration was all the time ONs were seen (which is the same duration)
-        expect(at_off_rsp.values.lastRunTime * 1000 - (at_off_moment - at_on_moment)).toBeLessThan(510);     // last cycle started when plugin saw first OFF to ON
+        expect(Math.abs(off_rsp.values.lastRunTime * 1000 - (off_moment - on_moment))).toBeLessThan(510);     // last cycle started when plugin saw first OFF to ON
     });
 });
 

@@ -84,6 +84,7 @@ describe("Live history accumulation", function () {
         this.tp.plugin.getHandler(this.tp.deviceName).readings.cycles = this.mockCb;  // monkey patch known history
 
         this.addCycles = async (numCycles) => {
+            await this.tp.sendTo(0);
             for (var i = 0; i < numCycles; i++) {
                 this.tp.sendTo(i + 1);
                 var d = await this.tp.getFrom();

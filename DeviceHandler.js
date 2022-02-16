@@ -82,7 +82,7 @@ class DeviceReadings {
             displayName: "Current status", enum: DeviceStatus_all,
             description: "Current status of device.  OFFLINE means no status report in 'too' long."
         },
-        (thatVal) => {return thatVal.toString()}
+            (thatVal) => { return thatVal.toString() }
         );
 
         // statistics accumulated from a resettable starting point in time
@@ -96,33 +96,41 @@ class DeviceReadings {
             (thatVal) => { return thatVal.toISOString(); }
         );
 
-        this.sinceCycles = new SkValue('sinceCycles', 0, {
-            displayName: "Run Cycles",
-            description: "On-off duty cycles since statistics start"
-        });
+        this.sinceCycles = new SkValue('sinceCycles', 0,
+            {
+                displayName: "Run Cycles",
+                description: "On-off duty cycles since statistics start"
+            }
+        );
 
-        this.sinceRunTime = new SkValue('sinceRunTime', 0, {
-            displayName: "Run Time", units: "s"
-            , description: "Cumulative run time since statistics start"
-        });
+        this.sinceRunTime = new SkValue('sinceRunTime', 0,
+            {
+                displayName: "Run Time", units: "s"
+                , description: "Cumulative run time since statistics start"
+            },
+            (thatVal) => { return dateToSec(thatVal) }
+        );
 
         // statistics based on last completed cycle
 
-        this.lastRunTime = new SkValue('lastRunTime', 0, {
-            displayName: "Last Run Time", units: "s", displayScale: [0, 150]
-            , description: "Runtime of last completed cycle"
-            , zones: [
-                { lower: undefined, upper: 5, state: "alarm", message: "Run Time Alarm Low" },
-                { lower: 5, upper: 10, state: "warn", message: "Run Time Warning Low" },
-                { lower: 10, upper: 15, state: "alert", message: "Run Time Low" },
-                { lower: 20, upper: 27, state: "normal", message: "" },
-                { lower: 27, upper: 32, state: "nominal", message: "" },
-                { lower: 32, upper: 35, state: "normal", message: "" },
-                { lower: 35, upper: 40, state: "alert", message: "Run Time High" },
-                { lower: 40, upper: 45, state: "warn", message: "Run Time Warning High" },
-                { lower: 45, upper: undefined, state: "alarm", message: "Run Time Alarm High" },
-            ]
-        });
+        this.lastRunTime = new SkValue('lastRunTime', 0,
+            {
+                displayName: "Last Run Time", units: "s", displayScale: [0, 150]
+                , description: "Runtime of last completed cycle"
+                , zones: [
+                    { lower: undefined, upper: 5, state: "alarm", message: "Run Time Alarm Low" },
+                    { lower: 5, upper: 10, state: "warn", message: "Run Time Warning Low" },
+                    { lower: 10, upper: 15, state: "alert", message: "Run Time Low" },
+                    { lower: 20, upper: 27, state: "normal", message: "" },
+                    { lower: 27, upper: 32, state: "nominal", message: "" },
+                    { lower: 32, upper: 35, state: "normal", message: "" },
+                    { lower: 35, upper: 40, state: "alert", message: "Run Time High" },
+                    { lower: 40, upper: 45, state: "warn", message: "Run Time Warning High" },
+                    { lower: 45, upper: undefined, state: "alarm", message: "Run Time Alarm High" },
+                ]
+            },
+            (thatVal) => { return dateToSec(thatVal) }
+        );
         const DAY_SEC = 24 * 60 * 60
         this.lastOffTime = new SkValue('lastOffTime', 0, {
             displayName: "Last Off Time", units: "s", displayScale: [0, 8 * DAY_SEC]
@@ -202,7 +210,7 @@ class DeviceReadings {
             if (!prevValue) {        // but it was not previously --> start new cycle
                 this.cycleWork = 0;
                 this.cycleStartDate = sampleDate;
-                                                    //bugbug update 'lastOffTime`
+                //bugbug update 'lastOffTime`
             }
             // anyway, it's running now: extend this cycle
             const prevSampleInterval = sampleDate - prevValueDate;
@@ -341,10 +349,10 @@ class DeviceHandler {
         //fixme <timer> is a valid date/time, but does it match timestamp if data is played back from file?
 
         assert.equal(this.status, "Started", "No heartbeat event till device handler fully started");
-        
-        assert( Math.abs((Date.now() - nowMs)) < 60*60*1000, `OnHeartBeat: event time ${nowMs} not near current time ${Date.now()}`);
+
+        assert(Math.abs((Date.now() - nowMs)) < 60 * 60 * 1000, `OnHeartBeat: event time ${nowMs} not near current time ${Date.now()}`);
         assert(this.lastHeartbeatMs < nowMs, `No back-to-back heartbeats.  Detected interval is: ${nowMs - this.lastHeartbeatMs}.`);
-        
+
         if (dateToSec(nowMs - this.lastValueDate) >= this.deviceConfig.secTimeout) {
             this.readings.forceOffline(nowMs);
         };
@@ -362,7 +370,7 @@ class DeviceHandler {
         }
 
         this.lastHeartbeatMs = nowMs;
-        
+
     }
 
 
@@ -439,7 +447,7 @@ class DeviceHandler {
 
         this._averageCounter += 1;
     }
-    
+
     /**
      * Send a single SignalK Update message, which can contain either values or metadata
      * @param {string} type is 'values' or 'meta'.  Accept no substitutes
@@ -559,11 +567,11 @@ class DeviceHandler {
 
         this.skPlugin.debug(`${this.deviceConfig.id} history request for ${start} thru ${end}`);
 
-        var startRange = new Date( start || 0);
+        var startRange = new Date(start || 0);
         var endRange = (end == undefined) ? new Date() : new Date(end);
 
         if (isNaN(endRange - startRange)) {
-            return {status: 400, msg:`invalid date range [${start}, ${end}]`};
+            return { status: 400, msg: `invalid date range [${start}, ${end}]` };
         };
 
         let res = [];
@@ -596,4 +604,4 @@ class DeviceHandler {
     }
 }
 
-module.exports = DeviceHandler;
+module.exports = { DeviceStatus, DeviceHandler };

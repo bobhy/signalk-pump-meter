@@ -1,6 +1,6 @@
 const Bacon = require('baconjs');
 const SignalKPlugin = require('signalk-plugin-base');
-const DeviceHandler = require('./DeviceHandler.js');
+const {DeviceHandler} = require('./DeviceHandler.js');
 
 
 class PumpMeterPlugin extends SignalKPlugin {

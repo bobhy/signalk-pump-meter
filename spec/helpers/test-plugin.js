@@ -174,31 +174,6 @@ class TestPlugin {
 
             }
         }
-        /*
-
-        while ((retVal = (this.responses.length > 0) ? this.responses[this.responses.length - 1] : undefined)
-            , !(       // exit the loop if ...
-                retVal
-                && (desiredType == 0 || (desiredType < 0 && 'meta' in retVal) || (desiredType > 0 && 'values' in retVal))
-                && (this.delta_seqNum > this.last_delta_gotten)    // there is a new delta
-                && (noWaitForNewSample                         // and we are not waiting for a sample
-                    || (this.responses.length > 0                // or we are waiting and there could be a sample
-                        && this.responses[this.responses.length - 1].sendTo_seqNum > this.last_sendTo_gotten // and a new sample
-                    ))
-            )) {
-            //bugbug doesn't fail the test case or print anything unless the throw below is also executed.
-            if (((new Date()) - startWait) >= Math.max(1000, this.deviceConfig.secReportInterval * 3 * 1000)) {
-                throw new Error('timed out waiting for a response from plugin');
-            }
-            //this.app.debug('... waiting for a response from plugin...')
-            await delay(this.heartbeatMs);  // must wait a response period
-        };
-
-        this.last_sendTo_gotten = retVal.sendTo_seqNum;
-        this.last_delta_gotten = retVal.delta_seqNum;
-
-        return retVal;
-        */
     }
 
     async getFrom(noWaitForNewSample) {
@@ -243,41 +218,6 @@ async function newTestPlugin() {
     await delay(100);       // give plugin time to initialize deviceHandler
     // do fixups here, if any.....
     return tp;
-}
-
-/**
- * container for accessing array of results in reverse chonological order
- *
- * @class RevChron
- */
-class RevChron {
-    constructor(arr_of_obj) {
-        this.data = arr_of_obj;
-        this.data_len = arr_of_obj.length;
-        assert.equal(this.data_len, 1, "No stacked responses?");
-    }
-    /**
-     * get number of elements
-     *
-     * @readonly
-     * @memberof RevChron
-     */
-    get length() { return this.data.length; }
-    /**
-     * get newest element
-     *
-     * @readonly
-     * @memberof RevChron
-     */
-    get last() { return this.data[this.data_len - 1] }
-    /**
-     * get previous element
-     *
-     * @param {number} n -- reverse chronological index of element to fetch: 1 is 2nd newest, 2 is 3rd newest, etc.
-     * @return {object}
-     * @memberof RevChron
-     */
-    prev(n) { return this.data[this.data_len - 1 - n]; }
 }
 
 module.exports = {
