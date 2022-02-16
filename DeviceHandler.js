@@ -16,7 +16,7 @@ const Data = require('dataclass').Data;
  * @return {number}  Same value in SK-(== SI standard) time units (seconds). Value has 3 decimal places (milliseconds) for testability with sub-second heartbeat.
  */
 function dateToSec(msValue) {
-    return msValue / 1000.0 //bugbug Math.round(msValue * 1000.0) / 1000.0;
+    return msValue / 1000.0     //todo round to 3 decimal places (ms)
 }
 
 /**
@@ -210,7 +210,7 @@ class DeviceReadings {
             if (!prevValue) {        // but it was not previously --> start new cycle
                 this.cycleWork = 0;
                 this.cycleStartDate = sampleDate;
-                //bugbug update 'lastOffTime`
+                //todo update 'lastOffTime`
             }
             // anyway, it's running now: extend this cycle
             const prevSampleInterval = sampleDate - prevValueDate;
@@ -228,7 +228,7 @@ class DeviceReadings {
                 this.sinceCycles.value += 1;
 
                 this.cycles.push({           // append latest cycle to *end* of log...
-                    date: timestamp(this.cycleStartDate),
+                    date: this.cycleStartDate,
                     runSec: dateToSec(curRunMs),
                 });
             };
@@ -260,7 +260,6 @@ class DeviceReadings {
     resetSince(sampleDate) {
         this.sinceCycles.value = 0;
         this.sinceRunTime.value = 0;
-        this.sinceWork.value = 0;
         this.since.value = sampleDate;
     }
 
@@ -323,7 +322,7 @@ class DeviceHandler {
         skPlugin.subscribeVal(this.skStream, this.onMonitorValue, this);
 
         this.lastSave = new Date();
-        this.lastValue = 0;         //bugbug really shouldn't assume we know what type the value is.
+        this.lastValue = 0;         //todo really shouldn't assume we know what type the value is.
         this.lastValueDate = new Date();
         this.lastSKReportDate = new Date();
         this.lastHeartbeatMs = new Date();
@@ -463,7 +462,7 @@ class DeviceHandler {
         //};
 
         var delta = {
-            //bugbug determine whether the delta should have 'context: <reference to self>
+            //todo determine whether the delta should have 'context: <reference to self>
             "updates": [
                 {
                     "source": {
@@ -555,7 +554,9 @@ class DeviceHandler {
 
 
     /**
-     * Get JSON values for a device history report
+     * Get values for a device history report
+     * 
+     * We assume the values get converted to JSON downstream of us.
      *
      * @param {string} start    Parsable date string for earliest date to retrieve (undefined to start with oldest record)
      * @param {string} end      Parsable date string for latest date to retrieve (undefined to end with newest)

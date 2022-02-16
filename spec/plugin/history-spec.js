@@ -79,7 +79,7 @@ describe("Live history accumulation", function () {
         this.mockHistCap = 10;
 
         this.mockCb = new CircularBuffer(this.mockHistCap);
-        this.mockCb.push({ date: Date.now() - 1000, runSec: 0 });       // .deltaValues() presumes there's always at least one cycle in history.
+        this.mockCb.push({ date: new Date(), runSec: 0 });       // .deltaValues() presumes there's always at least one cycle in history.
 
         this.tp.plugin.getHandler(this.tp.deviceName).readings.cycles = this.mockCb;  // monkey patch known history
 
