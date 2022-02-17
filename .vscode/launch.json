@@ -9,7 +9,7 @@
             "name": "Jasmine favorite",
             "request": "launch",
             "program": "${workspaceRoot}/node_modules/.bin/jasmine",
-            "args": ["spec/plugin/history-spec.js"],
+            "args": ["spec/plugin/deviceHandler-spec.js"],
             "skipFiles": [
                 "<node_internals>/**"
             ],

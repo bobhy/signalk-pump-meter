@@ -8,7 +8,7 @@ const assert = require('assert').strict;
 const _ = require('lodash');
 
 const TIME_PREC = 0.5; // when comparing times, match to within 2 or 3 hundredths.  Jasmine *rounds* each value before comparing??!  takes fractional exponent?
-const TIME_PREC_MS = -0.5   // likewise when comparing millisecond values, match within 2-3 tens of milliseconds.
+const TIME_PREC_MS = -0.5;   // likewise when comparing millisecond values, match within 2-3 tens of milliseconds.
 
 function delay(time) {
     return new Promise(resolve => setTimeout(resolve, time));
@@ -159,7 +159,7 @@ class TestPlugin {
                     (desiredType == 0)
                     || (desiredType < 0 && 'meta' in retVal)
                     || (desiredType > 0 && 'values' in retVal)
-                    )
+                )
                     && (noWaitForNewSample || (retVal.sendTo_seqNum > this.last_sendTo_gotten))
                 ) {
                     this.last_sendTo_gotten = retVal.sendTo_seqNum;
@@ -220,6 +220,49 @@ async function newTestPlugin() {
     return tp;
 }
 
+
+/*-------------- */
+
+/**
+ * Run testing scenario
+ * 
+ * Process is:
+ * 1. instantiate plugin
+ * 1. feed it values from @see primer
+ * 1. loop the following @see numIterations times
+ * 1. execute closure @see compare_with_prev() (which is assumed to contain interesting expectations)
+ * 
+ *
+ * @param {*} primer
+ * @param {*} numIterations
+ * @param {*} compare_with_prev
+ */
+async function runScenario(primer, numIterations, iterValues, compare_with_prev) {
+
+    const iterValArr = (typeof itervalues) == 'number'? [iterValues] : iterValues;
+    const tp = await newTestPlugin();
+
+    for (const v of primer) {
+        tp.sendTo(v);
+        await delay(1); // anti-fire-hose.
+    };
+
+    var prev_rsp = await tp.getFrom();
+    var prev_time = new Date();
+    var feed_forward = undefined;
+
+    for (var iterNum = 0; iterNum < numIterations; iterNum++) {
+        tp.sendTo(iterValArr[iterNum % iterValArr.length]);
+        const cur_rsp = await tp.getFrom();
+        const cur_time = new Date();
+
+        feed_forward = await compare_with_prev(iterNum, prev_time, prev_rsp, cur_time, cur_rsp, feed_forward);
+    };
+
+    return feed_forward;
+
+}
+
 module.exports = {
-    TestPlugin, delay, newTestPlugin, test_toSec, TIME_PREC, TIME_PREC_MS
-};
+    runScenario, TestPlugin, delay, newTestPlugin, test_toSec, TIME_PREC, TIME_PREC_MS
+}

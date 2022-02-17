@@ -1,13 +1,12 @@
 // tests for pump meter plugin and basic operation
 
-const { newTestPlugin, TestPlugin, delay, test_toSec, TIME_PREC, TIME_PREC_MS } = require("../helpers/test-plugin");
+const { runScenario, newTestPlugin, TestPlugin, delay, test_toSec, TIME_PREC, TIME_PREC_MS } = require("../helpers/test-plugin");
 const { DeviceStatus } = require("../../DeviceHandler");
 const { toPlainObject } = require("lodash");
 
 jasmine.DEFAULT_TIMEOUT_INTERVAL = 100000;
 
 const expKeys = ['status', 'since', 'sinceCycles', 'sinceRunTime', 'lastRunTime', 'lastOffTime'];
-
 
 describe("lifecycle of PumpMeterPlugin", function () {
 
@@ -49,10 +48,30 @@ describe("lifecycle of PumpMeterPlugin", function () {
 });
 
 
-xdescribe("Behavior while pump not running", function () {
-    it("increments time since last run, doesn't change lastRunTime or since statistics ")
+fdescribe("Behavior while pump not running", function () {
+    it("increments time since last run, doesn't change lastRunTime or since statistics ", async function () {
+
+        await runScenario([0, 0.01, 0],
+            10,
+            0,
+            async (i, pt, pr, ct, cr, ff) => {
+                if (ff != undefined) {
+                    expect(ff).toBe(100 * (i - 1));
+                }
+                expect(pt).toBeLessThan(ct);
+                expect(pr.values.lastOffTime).toBeLessThan(cr.values.lastOffTime);
+                expect(cr.values.lastOffTime - pr.values.lastOffTime).toBeCloseTo(ct - pt, TIME_PREC_MS);
+                expect(pr.values.lastRunTime).toBe(cr.values.lastRunTime)
+                expect(pr.values.since).toBe(cr.values.since);
+                expect(pr.values.sinceCycles).toBe(cr.values.sinceCycles);
+                expect(pr.values.sinceRunTime).toBe(cr.values.sinceRunTime);
+
+                return 100 * i;
+            });
+    });
 });
-xdescribe("Behavior when pump starts running and continues to run", function () {
+
+xdescribe("Behavior when pump starts running and continues to run", () => {
     it("ceases and retains time since last run, doesn't change lastRunTime and increments sinceRunTime");
 });
 xdescribe("Behavior when pump stops running", function () {
@@ -68,24 +87,7 @@ xdescribe("Managing the averages baseline", function () {
 });
 xdescribe("Steady state behavior when nothing is changing", function () {
     it("generates responses every polling interval period describing same last edge", async function () {
-        const tp = await newTestPlugin();
-        tp.sendTo(0);
-        const reportIntervalMs = 1000 * tp.options.devices[0].secReportInterval;
-        const orig_rsp = await tp.getFrom();
-        var prev_time = Date.now();
-        var orig_time = prev_time;
 
-        for (var i = 0; i < 5; i++) {
-            const cur_rsp = await tp.getFrom();
-            const cur_time = Date.now();
-
-            expect(cur_time - prev_time).toBeLessThan(2.1 * reportIntervalMs);  // fudge factor for a few milliseconds difference
-            expect(orig_rsp.values.lastCycleStart).toBeCloseTo(test_toSec(Date.now() - orig_time), TIME_PREC_MS);
-            expect(cur_rsp.values.sinceCycles).toEqual(orig_rsp.values.sinceCycles);  // cycle counts and accumulated run times don't chanve
-            expect(cur_rsp.values.sinceRunTime).toEqual(0);
-
-            prev_time = cur_time;
-        };
     });
 });
 
