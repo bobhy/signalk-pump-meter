@@ -39,6 +39,7 @@ class TestPlugin {
         this.app = new MockApp(this.dataPath);
         this.plugin = new Plugin(this.app);
         this.plugin.heartbeatMs = this.heartbeatMs;     // faster heartbeat to generate responses faster for faster testing!
+        this.reportMs = 2 * this.heartbeatMs;           // faster reporting interval, too.  Tests depend on this for allowable timing slop.
         this.options = {
             devices: [
                 {
@@ -48,7 +49,7 @@ class TestPlugin {
                     skRunStatsPath: this.rsPath,
                     secTimeout: 20,
                     offsetHours: 0,
-                    secReportInterval: 2 * (this.heartbeatMs / 1000.0), // .getFrom protocol needs > 1 heartbeat.
+                    secReportInterval: this.reportMs / 1000.0, // .getFrom protocol needs > 1 heartbeat.
                     noiseMargin: 0.01,               //fixme need to duplicate any options defined in UOT plugin here.
                     secNominalRunTIme: 30,
                     secNominalOffTime: 24 * 60 * 60 / 2,
@@ -239,7 +240,7 @@ async function newTestPlugin() {
  */
 async function runScenario(primer, numIterations, iterValues, compare_with_prev) {
 
-    const iterValArr = (typeof itervalues) == 'number'? [iterValues] : iterValues;
+    const iterValArr = (typeof itervalues) == 'number' ? [iterValues] : iterValues;
     const tp = await newTestPlugin();
 
     for (const v of primer) {
