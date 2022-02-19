@@ -8,7 +8,7 @@ jasmine.DEFAULT_TIMEOUT_INTERVAL = 100000;
 
 const expKeys = ['status', 'since', 'sinceCycles', 'sinceRunTime', 'lastRunTime', 'lastOffTime'];
 
-describe("lifecycle of PumpMeterPlugin", function () {
+describe("lifecycle of PumpMeterPlugin", () => {
 
     it("can be instantiated", async function () {
         const tp = await newTestPlugin();
@@ -18,7 +18,7 @@ describe("lifecycle of PumpMeterPlugin", function () {
         expect(tp.options.devices[0].name).toEqual('testPluginName');
     });
 
-    it("emits full meta on initial startup", async function () {
+    it("emits full meta on initial startup", async () => {
         const tp = await newTestPlugin();
         expect(tp.app.status).toEqual("Started");
         var rsp = await tp.getMetaFrom(true);
@@ -26,7 +26,7 @@ describe("lifecycle of PumpMeterPlugin", function () {
         expect(Object.keys(rsp.meta).length).toBe(expKeys.length);
     });
 
-    it("can be started and starts emitting status", async function () {
+    it("can be started and starts emitting status", async () => {
         const tp = await newTestPlugin();
         expect(tp.app.status).toEqual("Started");
         var rsp = await tp.getFrom(true);
@@ -47,20 +47,109 @@ describe("lifecycle of PumpMeterPlugin", function () {
     });
 });
 
+describe("Behavior of since* statistics", () => {
+    it("sinceRuntime increments whenever pump is running", async () => {
+        var rsp1;
+        const tp = await newTestPlugin();
+        rsp1 = await tp.getFrom(true);
+        expect(rsp1.values.sinceRunTime).toBe(0);
 
-fdescribe("Behavior while pump not running", function () {
-    it("increments time since last run, doesn't change lastRunTime or since statistics ", async function () {
+        tp.sendTo(0);
+        rsp1 = await tp.getFrom();
+        expect(rsp1.values.sinceRunTime).toBe(0);
+
+        tp.sendTo(100);
+        await delay(10);
+        rsp1 = await tp.getFrom();
+        expect(rsp1.values.sinceRunTime).toBeGreaterThan(0.010);
+
+        tp.sendTo(10);
+        await delay(10);
+        var rsp2 = await tp.getFrom();
+        expect(rsp2.values.sinceRunTime).toBeGreaterThan(0.020);
+
+    });
+
+    it("since doesn't change, except after reset.  Reset zeros sinceCycles and sinceRunTime, too.", async () => {
+        var rsp1;
+        var t1 = new Date();
+        const tp = await newTestPlugin();
+        rsp1 = await tp.getFrom(true);
+        expect(Math.abs(rsp1.values.since - t1)).toBeLessThan(tp.heartbeatMs);
+
+        tp.sendTo(20);      // start runtime incrementing
+        await delay(10);
+        tp.sendTo(20);      // start runtime incrementing
+        await delay(10);
+        var rsp2 = await tp.getFrom();
+        expect(rsp2.values.sinceCycles).toBe(0);    // no falling edge yet
+        expect(rsp2.values.sinceRunTime).toBeGreaterThan(0.010);   // +/- heartbeat period
+
+        tp.sendTo(0);       // falling edge
+        await delay(2);
+        var rsp3 = await tp.getFrom();
+        expect(rsp3.values.sinceCycles).toBe(1);
+        expect(rsp3.values.since).toBe(rsp1.values.since);
+
+        var t4 = new Date();
+        tp.plugin.getHandler(tp.deviceName).readings.resetSince(t4) // somehow reset counts
+
+        var rsp4 = await tp.getFrom(true);
+        expect(rsp4.values.sinceCycles).toBe(0);
+        expect(rsp4.values.since - t4).toBeCloseTo(0);
+        expect(rsp4.values.sinceRunTime).toBe(0);
+
+    });
+    it("sinceCycles is incremented on the falling edge, is constant otherwise.", async () => {
+        const tp = await newTestPlugin();
+
+        for (var i = 0; i < 10; i++){
+            tp.sendTo(1); // start a cycle.        
+            await delay(10);    // let cycle run just a little bit
+            var rsp1 = await tp.getFrom();
+
+            tp.sendTo(0);
+            await delay(10);
+            var rsp2 = await tp.getFrom();
+
+            expect(rsp2.values.sinceCycles - rsp1.values.sinceCycles).toBe(1);  
+        };
+     });
+});
+
+xdescribe("Behavior of last* statistics", () => {
+    it("lastRuntime is latched on falling edge, doesn't change otherwise.", async () => { });
+    it("lastOfftime is latched on rising edge, but doesn't change otherwise.", async () => { });
+
+});
+
+xdescribe("Behavior of current* statistics", () => {
+    it("status is always STOPPED, RUNNING or OFFLINE, responds immediately to state changes.", async () => { });
+    it("currentOffTime increments while the device is STOPPED or OFFLINE, latches on the rising edge and doesn't change while device is ON.", () => { });
+
+});
+
+
+
+
+describe("Behavior when pump starts running and continues to run", () => {
+    it("latches lastOffTime on the OFF to ON transition", async () => {
+
+        const tp = await newTestPlugin();
+        var prev_rsp;
+        var prev_time;
+
+        const [off_time, off_rsp] = await runScenario(
+            [0, 1, 1, 1, 1], 1, [0], async (i, pt, pr, ct, cr, ff) => {
+                return [pt, pr];
+            });
 
         await runScenario([0, 0.01, 0],
-            10,
-            0,
+            3,
+            [1],
             async (i, pt, pr, ct, cr, ff) => {
-                if (ff != undefined) {
-                    expect(ff).toBe(100 * (i - 1));
-                }
                 expect(pt).toBeLessThan(ct);
-                expect(pr.values.lastOffTime).toBeLessThan(cr.values.lastOffTime);
-                expect(cr.values.lastOffTime - pr.values.lastOffTime).toBeCloseTo(ct - pt, TIME_PREC_MS);
+                expect(pr.values.lastOffTime).toBe(cr.values.lastOffTime);
                 expect(pr.values.lastRunTime).toBe(cr.values.lastRunTime)
                 expect(pr.values.since).toBe(cr.values.since);
                 expect(pr.values.sinceCycles).toBe(cr.values.sinceCycles);
@@ -69,10 +158,24 @@ fdescribe("Behavior while pump not running", function () {
                 return 100 * i;
             });
     });
-});
+    it("increments sinceRunTime", async () => {
+        await runScenario([0, 0.01, 0],
+            3,
+            0,
+            async (i, pt, pr, ct, cr, ff) => {
+                if (ff != undefined) {
+                    expect(ff).toBe(100 * (i - 1));
+                }
+                expect(pt).toBeLessThan(ct);
+                expect(pr.values.lastOffTime).toBe(cr.values.lastOffTime);
+                expect(pr.values.lastRunTime).toBe(cr.values.lastRunTime)
+                expect(pr.values.since).toBe(cr.values.since);
+                expect(pr.values.sinceCycles).toBe(cr.values.sinceCycles);
+                expect(pr.values.sinceRunTime).toBe(cr.values.sinceRunTime);
 
-xdescribe("Behavior when pump starts running and continues to run", () => {
-    it("ceases and retains time since last run, doesn't change lastRunTime and increments sinceRunTime");
+                return 100 * i;
+            });
+    });
 });
 xdescribe("Behavior when pump stops running", function () {
     it("snapshots lastRuntime, increments sinceCycles, then starts incrementing timeSinceLastRun, stops accumulating sinceRunTime")

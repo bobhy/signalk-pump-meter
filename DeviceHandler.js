@@ -92,8 +92,7 @@ class DeviceReadings {
             {
                 displayName: "Statistics Start", units: "timestamp",
                 description: "Cycles and runtime accumulated since this moment"
-            },
-            (thatVal) => { return thatVal.toISOString(); }
+            }
         );
 
         this.sinceCycles = new SkValue('sinceCycles', 0,
@@ -165,6 +164,8 @@ class DeviceReadings {
         this.cycleStartDate = new Date();   // beginning of cycle: OFF to ON
         this.cycleWork = 0;
 
+        this.cycleEndDate = new Date();     // end of cycle: ON to OFF
+
         this.cycles = new CircularBuffer(1000); // history of completed cycles: {start: <date/time>, run: <sec>})
         this.cycles.push({ date: (new Date()), runSec: 0 });  // dummy first completed cycle
 
@@ -209,8 +210,10 @@ class DeviceReadings {
         if (sampleValue) {                  // pump *IS* running
             if (!prevValue) {        // but it was not previously --> start new cycle
                 this.cycleWork = 0;
+
+                this.lastOffTime.value = sampleDate - this.cycleEndDate;
+
                 this.cycleStartDate = sampleDate;
-                //todo update 'lastOffTime`
             }
             // anyway, it's running now: extend this cycle
             const prevSampleInterval = sampleDate - prevValueDate;
@@ -222,8 +225,9 @@ class DeviceReadings {
 
         } else {                            // pump *NOT* running
             if (prevValue) {          // but it was previously --> record end of cycle
-                const curRunMs = sampleDate - this.cycleStartDate;
+                this.cycleEndDate = sampleDate;
 
+                const curRunMs = sampleDate - this.cycleStartDate;
                 this.lastRunTime.value = sampleDate - this.cycleStartDate
                 this.sinceCycles.value += 1;
 
@@ -468,7 +472,7 @@ class DeviceHandler {
                     "source": {
                         "label": this.id,
                     },
-                    "timestamp": new Date().toISOString()
+                    "timestamp": new Date(),
                 }
             ]
         };
