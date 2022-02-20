@@ -24,7 +24,7 @@ This is a user-assigned name for the device, used to report statistics and as th
 is the SignalK path that the plugin monitors to determine if the device is on. The Pump Meter plugin *listens* for a value on this path: something else in your network should be generating it.  Any non-zero numeric value or non-empty string is interpreted to mean the device is currently ON.  A zero value or empty string indicates the device is OFF.
 
 `SignalK path under which to report pump run data`
-Is the parent path of all the statistics reported by the plugin.  If you leave the configured value blank (the default), statistics will be reported under `Pump name`.  For example, if `Pump name` is configured as `BilgePump.1`, runtime statistics will be reported on SignalK path `BilgePump.1.runTime`, `BilgePump.1.cycleCount` and so on (see complete list below. Note that `SignalK value that indicates pump is on` does not have to be under this path: these paths can be unrelated.
+Is the parent path of all the statistics reported by the plugin.  If you leave the configured value blank (the default), statistics will be reported under `Pump name`.  For example, if `Pump name` is configured as `BilgePump.1`, runtime statistics will be reported on SignalK path `BilgePump.1.since`, `BilgePump.1.sinceCycles` and so on (see complete list below. Note that `SignalK value that indicates pump is on` does not have to be under this path: these paths can be unrelated.
 
 `Run data reporting interval (secs)`
 indicates how often the run data statistics and status will be sent over the SignalK data stream.
@@ -37,17 +37,20 @@ The smaller this number, the quicker the plugin can determine the sensor network
 ## Pump run data
 
 Under `SignalK path under which to report pump run data`, the pump meter plugin reports the following values:
-* `.historyStart` -- Length of the current data monitoring history. (seconds).
-  `.runTime` and `.cycleCount` are relative to this interval. Since plugin history is stored in a folder based on the plugin `Pump Name`, changing the configuration can start a new history and zero out run time.
-* `.status` -- Current device status, one of:
-  - "ON" (device is running),
-  - "OFF" (device is not running) and
-  - "OFFLINE" (device has not reported data for "too" long.)
-* `.cycleCount` -- Number of ON->OFF cycles (from start of plugin history).
-* `.runTime` -- Cumulative length of time (seconds) the device has been ON from start of plugin history.
-* `.lastRunStart` -- How long ago the last duty cycle began (the OFF->ON transition, in seconds).
-* `.lastRunTime` -- Length of time the device was on in the last duty cycle. (Seconds).  Note that this value continues to increment while the device is on.
-
+* Current status -- these reflect what's happening 'right now', based on the last received `SignalK value that indicates pump is on`.
+  * `status` -- Current device status, one of:
+    * `STOPPED` -- device not currently running. (indicator has been received and is zero.)
+    * `RUNNING` -- device *is* currently running.
+    * `OFFLINE` -- No indicator value has been received in "too" long.
+  * `timeInState` -- how long the device has been in `status` state (seconds).  This resets when device changes state, then starts incrementing again.
+* Accumulated statistics -- sum total of what's happened since a moment in the past.  These statistics can be zeroed without affecting the ability to query the history for even earlier events. (means of zeroing the statistics is a [work in progress](#work-in-progress)).
+  * `since` -- Timestamp when statistics were last zeroed.
+  * `sinceCycles` -- Count of full duty cycles since `since`.  
+  * `sinceRunTime` -- Accumulated time the device has been `RUNNING`, since `since`. (seconds).
+* Last cycle statistics -- snapshot of the last complete duty cycle.  Note that the meta `zone` ranges for Nominal and Normal are periodically  adjusted automatically based on long-term averages of these.
+    * `lastRunTime` -- how long the device was `RUNNING` in the  last full duty cycle (seconds).  This value is updated when the device completes its last run, e.g on the RUNNING to STOPPED transition.
+    * `lastOffTime` -- how long the device was `STOPPED` in the last full duty cycle. (seconds).  This value is updated when the device completes its last off cycle, i.e, on the `STOPPED` to `RUNNING` transition.  Thus, if the device is currently in the STOPPED state, which it usually is, `lastOffTime` represents the *previous* duty cycle.  See `timeInState` if you want to know how long the device has been off right now, and compare this to `lastOffTime` if you are worried this might be "too" long.
+    
 ## Reviewing the Data
 The pump Meter plugin installs a simple Webapp interface that allows you to review the data it has recorded. You can
 view this data in a web browser using the path `/signalk-pump-meter`.  For example:
