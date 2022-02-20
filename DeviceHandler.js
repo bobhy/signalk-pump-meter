@@ -5,6 +5,7 @@ const _ = require('lodash');
 const assert = require('assert').strict;
 const Data = require('dataclass').Data;
 
+const DAY_SEC = 24 * 60 * 60    // number of seconds in a day
 
 // pump run statistics logged and reported periodically
 
@@ -78,11 +79,27 @@ class DeviceReadings {
 
         this.config = config;
 
+        // statistics about current status
+
         this.status = new SkValue('status', DeviceStatus.OFFLINE, {
             displayName: "Current status", enum: DeviceStatus_all,
             description: "Current status of device.  OFFLINE means no status report in 'too' long."
         },
             (thatVal) => { return thatVal.toString() }
+        );
+
+        this.timeInState = new SkValue('timeInState', 0, {
+            displayName: "Time since last state change", units: "s",    // stored internally as d/t, converted when sending the delta
+            description: "Time since last state change occurred.",
+            displayScale: [0, 8 * DAY_SEC],
+            zones: [
+                { lower: undefined, upper: 2 * DAY_SEC, state: "normal", message: "" },
+                { lower: 2 * DAY_SEC, upper: 2.5 * DAY_SEC, state: "alert", message: "Time Between Cycles High" },
+                { lower: 2.5 * DAY_SEC, upper: 4 * DAY_SEC, state: "warn", message: "Time Between Cycles Warning High" },
+                { lower: 7 * DAY_SEC, upper: undefined, state: "alarm", message: "Time Between Cycles Alarm High" },
+            ]
+        },
+            (thatVal) => { return dateToSec((new Date()) - thatVal) }
         );
 
         // statistics accumulated from a resettable starting point in time
@@ -112,7 +129,7 @@ class DeviceReadings {
 
         // statistics based on last completed cycle
 
-        this.lastRunTime = new SkValue('lastRunTime', 0,
+        this.lastRunTime = new SkValue('lastRunTime', new Date(),
             {
                 displayName: "Last Run Time", units: "s", displayScale: [0, 150]
                 , description: "Runtime of last completed cycle"
@@ -130,7 +147,7 @@ class DeviceReadings {
             },
             (thatVal) => { return dateToSec(thatVal) }
         );
-        const DAY_SEC = 24 * 60 * 60
+        
         this.lastOffTime = new SkValue('lastOffTime', 0, {
             displayName: "Last Off Time", units: "s", displayScale: [0, 8 * DAY_SEC]
             , description: "Time pump has been off since last completed cycle"
@@ -210,6 +227,7 @@ class DeviceReadings {
         if (sampleValue) {                  // pump *IS* running
             if (!prevValue) {        // but it was not previously --> start new cycle
                 this.cycleWork = 0;
+                this.timeInState.value = sampleDate;
 
                 this.lastOffTime.value = sampleDate - this.cycleEndDate;
 
@@ -225,6 +243,7 @@ class DeviceReadings {
 
         } else {                            // pump *NOT* running
             if (prevValue) {          // but it was previously --> record end of cycle
+                this.timeInState.value = sampleDate;
                 this.cycleEndDate = sampleDate;
 
                 const curRunMs = sampleDate - this.cycleStartDate;
@@ -250,7 +269,7 @@ class DeviceReadings {
      */
     forceOffline(sampleDate) {
         this.status.value = DeviceStatus.OFFLINE;
-        this.edgeDate = sampleDate;
+        this.timeInState.value = sampleDate;
     }
 
     /**

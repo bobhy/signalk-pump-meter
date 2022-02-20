@@ -117,7 +117,7 @@ describe("Behavior of since* statistics", () => {
 });
 
 describe("Behavior of last* statistics", () => {
-    fit("lastRuntime is latched on falling edge, doesn't change otherwise.", async () => {
+    it("lastRuntime is latched on falling edge, doesn't change otherwise.", async () => {
         const tp = await newTestPlugin();
         var t = await tp.getFrom(true);
 
@@ -205,8 +205,67 @@ describe("Behavior of last* statistics", () => {
 });
 
 describe("Behavior of current* statistics", () => {
-    it("status is always STOPPED, RUNNING or OFFLINE, responds immediately to state changes.", async () => { });
-    it("currentOffTime increments while the device is STOPPED or OFFLINE, latches on the rising edge and doesn't change while device is ON.", () => { });
+    it("status is always STOPPED, RUNNING or OFFLINE, responds immediately to state changes.", async () => {
+        const tp = await newTestPlugin();
+
+        var rsp;
+
+        rsp = await tp.getFrom(true);
+        expect(rsp.values.status).toBe(DeviceStatus.OFFLINE.toString());
+
+        tp.sendTo(1);
+        rsp = await tp.getFrom();
+        expect(rsp.values.status).toBe(DeviceStatus.RUNNING.toString());
+
+        tp.sendTo(0);
+        rsp = await tp.getFrom();
+        expect(rsp.values.status).toBe(DeviceStatus.STOPPED.toString());
+
+
+        tp.plugin.getHandler(tp.deviceName).deviceConfig.secTimeout = 1;        // this business of accessing deviceHandler options is getting wierd!
+
+        await delay(1500);
+        rsp = await tp.getFrom(true);
+        expect(rsp.values.status).toBe(DeviceStatus.OFFLINE.toString());
+
+    });
+    it("timeInState is reset when device changes state, increments till next.", async () => {
+        const tp = await newTestPlugin();
+
+        var rsp;
+        var prev_rsp;
+
+        await delay(300);
+        rsp = await tp.getFrom(true);
+        expect(rsp.values.status).toBe(DeviceStatus.OFFLINE.toString());
+        expect(rsp.values.timeInState).toBeGreaterThanOrEqual(0.3);
+
+        tp.sendTo(1);
+        prev_rsp = rsp;
+        rsp = await tp.getFrom();
+        expect(rsp.values.status).toBe(DeviceStatus.RUNNING.toString());
+        expect(rsp.values.timeInState).toBeLessThan(prev_rsp.values.timeInState);
+        await delay(200);
+        rsp = await tp.getFrom();
+        expect(rsp.values.timeInState).toBeGreaterThanOrEqual(0.2);
+
+        tp.sendTo(0);
+        prev_rsp = rsp;
+        rsp = await tp.getFrom();
+        expect(rsp.values.status).toBe(DeviceStatus.STOPPED.toString());
+        expect(rsp.values.timeInState).toBeLessThan(prev_rsp.values.timeInState);
+        await delay(500);
+        rsp = await tp.getFrom();
+        expect(rsp.values.timeInState).toBeGreaterThanOrEqual(0.5);
+
+
+        tp.plugin.getHandler(tp.deviceName).deviceConfig.secTimeout = 1;        // this business of accessing deviceHandler options is getting wierd!
+
+        await delay(1500);
+        rsp = await tp.getFrom(true);
+        expect(rsp.values.status).toBe(DeviceStatus.OFFLINE.toString());
+
+    });
 
 });
 
