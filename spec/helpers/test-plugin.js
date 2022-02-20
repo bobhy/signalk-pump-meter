@@ -65,7 +65,12 @@ class TestPlugin {
         this.last_sendTo_gotten = 0;    // updated when getFrom() returns a delta to test, so test can choose to wait for a delta emitted after the sample was processed.
         this.last_delta_gotten = 0;     // updated when getFrom() returns a delta, so it never returns the same delta twice
 
-        this.responses = [] // of { values: {}, meta: {} };        // note, not [path:, value:], but {path: value}!
+        this.responsesLog = []  // historical log -- all deltas
+
+        // save the last message of each kind for tests
+        //  make this: 0 - delta, 1 - full meta, 2 - incremental meta
+
+        this.responses = [undefined, undefined, undefined] // of { values: {}, meta: {} };        // note, not [path:, value:], but {path: value}!
 
         this.app.handleMessage = (id, delta) => {   // hotwire handleMessage
             const duzed = delta.updates[0]; // we only deal with 1 update per delta.
@@ -81,7 +86,6 @@ class TestPlugin {
                 timestamp: duzed.timestamp,
                 delta_seqNum: this.delta_seqNum,
                 sendTo_seqNum: this.sendTo_seqNum,
-                values: {}, meta: {}
             }
 
             const devicePathPrefix = this.deviceConfig.skRunStatsPath;
@@ -91,6 +95,7 @@ class TestPlugin {
             // (sounds like a glib rationalization that will come back to haunt me)
             for (const type of ['values', 'meta']) {
                 if (type in duzed) {
+                    curResp[type] = {};
                     for (const v of duzed[type]) {
                         expect(v.path.startsWith(devicePathPrefix)).toBeTrue();
                         expect(curResp[type][v.path.slice(1 + devicePathPrefix.length)]).toBeUndefined();
@@ -102,12 +107,13 @@ class TestPlugin {
                 }
             }
 
-            // strip empty meta or values property -- unnecessarily hard!
-            if (Object.keys(curResp.values).length == 0) { delete curResp.values; };
-            if (Object.keys(curResp.meta).length == 0) { delete curResp.meta; };
-
-            this.responses.push(curResp);
-            expect(this.responses.length).toBe(this.delta_seqNum);
+            if ('values' in curResp) {
+                this.responses[0] = curResp;
+            } else if ('meta' in curResp && Object.keys(curResp.meta).length <= 3) {
+                this.responses[1] = curResp;
+            } else {
+                this.responses[2] = curResp
+            }
         };
 
         this.plugin.start(this.options);    //fixme this overrides the options defined in the UOT plugin!
@@ -134,61 +140,59 @@ class TestPlugin {
     }
 
     /**
-     * retrieve SignalK deltas from UOT plugin., reformat results for easier testing (after validating delta itself).
-     * Note that the plugin may have queued multiple deltas, this call clears them all.
+     * retrieve SignalK delta from UOT plugin.
+     * 3 independent queues: .values, (incremental).meta and (full) .meta.
+     * This call returns the *newest* of the selected queue, ignores the older ones (in that queue).
+     * Only returns the element once, waits for UOT plugin to generate another, if none currently available.
+     * Can throw timeout error if it waits "too" long.
      *
-     * @param {number} desiredType <0 to fetch only .meta, 0 to fetch any type, >0 to fetch only .values
+     * @param {number} desiredType (matches index in this.responses), 0 for .value, 1 for (incremental) .meta, 2 for full .meta
      * @param {boolean} noWaitForNewSample True to return a delta without waiting for a new input sample.
-     * Note that getFrom() *always* waits for a new delta to be emitted, whether it has new values or not.
-     * @return {[{keyName: value}]} -- array of deltas, each item is an object of key, value pairs.
-     *                              key is leaf name of the SK path, e.g electrical.batteries.1.foo becomes just foo.
+     * @return {{timestamp, sendTo_seqNum, values or meta}} -- in values or meta array of objects, {path: <full path>, value:<value>}
+     *                                                          has been simplified to: {<leaf key name>: <value>}.
      *                              value is unmodified.
      * @memberof TestPlugin
      */
-    async getAnyFrom(desiredType, noWaitForNewSample) {
+    async _getAnyFrom(desiredType, noWaitForNewSample) {
 
         const startWait = new Date();
 
-        assert(typeof desiredType == 'number', `getAnyFrom(): desiredType must be numeric`);
+        assert(typeof desiredType == 'number' && desiredType >= 0 && desiredType <= 2, `getAnyFrom(): desiredType must be numeric [0,2]`);
+
         var retVal = undefined;
 
         while (true) {
-            if (this.responses.length - 1 > this.last_delta_gotten) {   // unseen message
-                this.last_delta_gotten += 1;
-                retVal = this.responses[this.last_delta_gotten];
-                if ((
-                    (desiredType == 0)
-                    || (desiredType < 0 && 'meta' in retVal)
-                    || (desiredType > 0 && 'values' in retVal)
-                )
-                    && (noWaitForNewSample || (retVal.sendTo_seqNum > this.last_sendTo_gotten))
-                ) {
-                    this.last_sendTo_gotten = retVal.sendTo_seqNum;
-                    return retVal;
+            retVal = this.responses[desiredType];
+            this.responses[desiredType] = undefined;    // only process this delta once
+            if ((retVal != undefined)
+                && (noWaitForNewSample || (retVal.sendTo_seqNum > this.last_sendTo_gotten))) {
+                if (retVal == undefined) {
+                    var t = 1;
                 }
-            } else {        // no messages in queue
-                if (((new Date()) - startWait) >= 1000 * (Math.max(1, this.deviceConfig.secReportInterval * 3))) {
-                    throw new Error('timed out waiting for a response from plugin');
-                }
-                //this.app.debug('... waiting for a response from plugin...')
-                await delay(this.heartbeatMs);  // must wait a response period
-
+                this.last_sendTo_gotten = retVal.sendTo_seqNum;
+                return retVal;
             }
+            // no message of appropriate type already queued.
+            if (((new Date()) - startWait) >= 1000 * (Math.max(1, this.deviceConfig.secReportInterval * 3))) {
+                throw new Error('timed out waiting for a response from plugin');
+            }
+            //this.app.debug('... waiting for a response from plugin...')
+            await delay(this.heartbeatMs);  // must wait a response period
         }
+        var t1 = 1;
+
     }
 
     async getFrom(noWaitForNewSample) {
-        return await this.getAnyFrom(1, noWaitForNewSample);
+        return await this._getAnyFrom(0, noWaitForNewSample);
     }
     async getMetaFrom(noWaitForNewSample) {
-        return await this.getAnyFrom(-1, noWaitForNewSample);
+        return await this._getAnyFrom(1, noWaitForNewSample);
+    }
+    async getFullMetaFrom(noWaitForNewSample) {
+        return await this._getAnyFrom(2, noWaitForNewSample);
     }
 
-    async lookFor(type, key) {
-        while (this.responses.length > 0) {
-            //if matches and key, return it 
-        }
-    }
     /**
      * shim to invoke @see DeviceHandler.getHistory().
      *
