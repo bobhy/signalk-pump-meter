@@ -6,27 +6,28 @@ const {DeviceHandler} = require('./DeviceHandler.js');
 class PumpMeterPlugin extends SignalKPlugin {
 
   constructor(app) {
-    super({ app, id: 'signalk-pump-meter', name: 'Pump Meter', description: 'Synthesizes pump runtime and cycle count from another SignalK value that indicates the device is running' });
+    super({ app, id: 'signalk-pump-meter', name: 'Pump Meter', description: 
+    'Synthesizes runtime and cycle count from another SignalK value that indicates the device is running.  Device can be any intermittent motor, not just a pump.' });
 
     this.optObj({ propName: 'devices', title: 'Devices to monitor', isArray: true, itemTitle: 'Device' });
     // the following properties apply to each device
-    this.optStr({ propName: 'name', title: 'Pump name', longDescription: "User-assigned name for this device, must be unique.", required: true });
+    this.optStr({ propName: 'name', title: 'Device name', longDescription: "User-assigned name for this device, must be unique.", required: true });
     this.optStr({
-      propName: 'skMonitorPath', title: 'SignalK value that indicates pump is on', required: true
+      propName: 'skMonitorPath', title: 'SignalK value that indicates device is on', required: true
       , longDescription: "Expected to be provided by some other source.  Any non-zero value or non-empty string (truthy value) means device is currently on."
       , defaultVal: "electrical.batteries.254.current"
     });
     this.optStr({
-      propName: 'skRunStatsPath', title: 'SignalK path under which to report pump run data'
-      , longDescription: 'Common SignalK path prefix under which to report pump statistics.  Leave blank to report under device name configured above.'
+      propName: 'skRunStatsPath', title: 'SignalK path under which to report device run data'
+      , longDescription: 'Common SignalK path prefix under which to report device statistics.  Leave blank to report under device name configured above.'
       , defaultVal: ""
     });
-    this.optInt({ propName: 'secReportInterval', title: 'Run data reporting interval (secs)', defaultVal: 30, longDescription: 'Number of seconds between each report of pump run data' });
-    this.optInt({ propName: 'secTimeout', title: 'Pump signal timeout (secs)', defaultVal: 300, longDescription: 'Declare the device off if no signal received for this interval.' });
+    this.optInt({ propName: 'secReportInterval', title: 'Run data reporting interval (secs)', defaultVal: 30, longDescription: 'Number of seconds between each report of device run data' });
+    this.optInt({ propName: 'secTimeout', title: 'Device signal timeout (secs)', defaultVal: 300, longDescription: 'Declare the device off if no signal received for this interval.' });
     this.optNum({ propName: 'noiseMargin', title: 'Noise margin', defaultVal: 0.010, longDescription: 'Range around zero to be considered zero for SkMonitorPath.' });
 
-    this.optInt({ propName: 'secNominalRunTime', title: 'Default normal pump run time (secs)', defaultVal: 30, longDescription: 'Expected normal duration of pump run.' });
-    this.optInt({ propName: 'secNominalOffTime', title: 'Default normal pump time between runs (secs)', defaultVal: (24*60*60/2), longDescription: 'Expected normal time between pump runs (half a day).' });
+    this.optInt({ propName: 'secNominalRunTime', title: 'Default normal device run time (secs)', defaultVal: 30, longDescription: 'Expected normal duration of device run.' });
+    this.optInt({ propName: 'secNominalOffTime', title: 'Default normal device time between runs (secs)', defaultVal: (24*60*60/2), longDescription: 'Expected normal time between device runs (half a day).' });
 
     this.optInt({ propName: 'dayAveragingWindow', title: 'Average statistics over this many days.', defaultVal: 7, longDescription: 'Window of time over which statistics are averaged.' });
 
