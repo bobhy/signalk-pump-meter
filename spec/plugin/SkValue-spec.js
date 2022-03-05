@@ -10,9 +10,7 @@ const exp_keys = {    // key: [hasRange,]
     since: [],
     sinceCycles: [],
     sinceRunTime: [],
-    sinceWork: [],
     lastRunTime: [true],
-    lastWork: [true],
 };
 
 

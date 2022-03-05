@@ -84,10 +84,11 @@ describe("Live history accumulation", function () {
         this.tp.plugin.getHandler(this.tp.deviceName).readings.cycles = this.mockCb;  // monkey patch known history
 
         this.addCycles = async (numCycles) => {
-            await this.tp.sendTo(0);
+            this.tp.sendTo(0);
             for (var i = 0; i < numCycles; i++) {
                 this.tp.sendTo(i + 1);
                 var d = await this.tp.getFrom();
+                await delay(5);
                 this.tp.sendTo(0);
                 d = await this.tp.getFrom();
             }
@@ -107,6 +108,7 @@ describe("Live history accumulation", function () {
         for (var cur_cycle of rv.slice(1)) {
             expect(prev_cycle.date).toBeLessThan(cur_cycle.date);
             expect(cur_cycle.runSec).toBeGreaterThan(0);
+            prev_cycle = cur_cycle;
         }
     });
 

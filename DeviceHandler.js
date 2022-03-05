@@ -179,8 +179,7 @@ class DeviceReadings {
         // initialize other working variables
 
         this.cycleStartDate = new Date();   // beginning of cycle: OFF to ON
-        this.cycleWork = 0;
-
+        
         this.cycleEndDate = new Date();     // end of cycle: ON to OFF
 
         this.cycles = new CircularBuffer(1000); // history of completed cycles: {start: <date/time>, run: <sec>})
@@ -226,7 +225,6 @@ class DeviceReadings {
 
         if (sampleValue) {                  // pump *IS* running
             if (!prevValue) {        // but it was not previously --> start new cycle
-                this.cycleWork = 0;
                 this.timeInState.value = sampleDate;
 
                 this.lastOffTime.value = sampleDate - this.cycleEndDate;
@@ -235,9 +233,6 @@ class DeviceReadings {
             }
             // anyway, it's running now: extend this cycle
             const prevSampleInterval = sampleDate - prevValueDate;
-            const curWork = sampleValue * dateToSec(prevSampleInterval);  // assume constant effort since last sample
-
-            this.cycleWork += curWork;
             this.sinceRunTime.value += prevSampleInterval;
             this.status.value = DeviceStatus.RUNNING;
 
@@ -553,8 +548,9 @@ class DeviceHandler {
      * then send an SK update of the changed properties.
      *
      * @param {[SkValue, newMeta], . . .] } skObjMeta   A list of 2-element lists:
-     * [skVal, newMeta], skVal - The reading statistic to update
-     * newMeta   An object containing the new metadata, in form {<metaKey>: <metaValue>}.
+     * [skVal, newMeta], where:
+     * * skVal - The reading statistic to update
+     * * newMeta   An object containing the new metadata, in form {<metaKey>: <metaValue>}.
      * Note that you must provide a *complete* new value for compound meta like `displayScale`
      * and `zones`, it's not enough to change just one element of that value.
      * @memberof DeviceHandler

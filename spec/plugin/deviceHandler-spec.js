@@ -250,6 +250,7 @@ describe("Behavior of current* statistics", () => {
         expect(rsp.values.timeInState).toBeLessThan(prev_rsp.values.timeInState);
         await delay(200);
         rsp = await tp.getFrom(true);
+        rsp = await tp.getFrom(true);   // something hacky here -- delay(200) only delays 0.105 sec (sometimes?)
         expect(rsp.values.timeInState).toBeGreaterThanOrEqual(0.2);
 
         tp.sendTo(0);
