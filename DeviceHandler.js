@@ -1,9 +1,12 @@
 const { SkMeta, SkValue } = require('./SkValue');
 const CircularBuffer = require('circular-buffer');
-const JSZip = require('jszip');
 const _ = require('lodash');
 const assert = require('assert').strict;
 const Data = require('dataclass').Data;
+const ESSerializer = require('esserializer');
+ESSerializer.interceptRequire();
+
+const fs = require('fs');
 
 const DAY_SEC = 24 * 60 * 60    // number of seconds in a day
 
@@ -68,6 +71,40 @@ DeviceStatus_all = Object.freeze(DeviceStatus_all); // whew!
  * @class DeviceReadings
  */
 class DeviceReadings {
+
+    /**
+     * Restore checkpointed data, if possible
+     *
+     *
+     * @param {*} filePath
+     * @returns {DeviceReadings} 
+     * @memberof DeviceReadings
+     */
+    static restore(filePath) {
+        var instance = undefined;
+
+        try {
+            const serInstance = fs.readFileSync(filePath, 'utf-8')
+            instance = ESSerializer.deserialize(serInstance, [DeviceReadings, DeviceStatus, SkValue, CircularBuffer]);
+        } catch (e) {
+            if (e.code != 'ENOENT') {
+                throw (e);
+            }
+        }
+
+        return instance;
+    }
+
+    /**
+     * Save current values to disk
+     *
+     * @param {*} filePath
+     * @memberof DeviceReadings
+     */
+    static save(instance, filePath) {
+        const serInstance = ESSerializer.serialize(instance);
+        fs.writeFileSync(filePath, serInstance, 'utf-8');
+    }
 
     /**
      * Creates an instance of DeviceReadings.
@@ -147,7 +184,7 @@ class DeviceReadings {
             },
             (thatVal) => { return dateToSec(thatVal) }
         );
-        
+
         this.lastOffTime = new SkValue('lastOffTime', 0, {
             displayName: "Last Off Time", units: "s", displayScale: [0, 8 * DAY_SEC]
             , description: "Time pump has been off since last completed cycle"
@@ -169,7 +206,7 @@ class DeviceReadings {
             displayName: "Average Run Time per cycle", units: "s", displayScale: [0, 150]
             , description: "Average runtime (see dayAveragingWindow)"
         });
-
+    
         this.avgOffTime = new SkValue('avgOffTime', 0, {
             displayName: "Avg Off Time", units: "s", displayScale: [0, 150]
             , description: "Average time pump has been off between cycles (see dayAveragingWindow)"
@@ -179,11 +216,11 @@ class DeviceReadings {
         // initialize other working variables
 
         this.cycleStartDate = new Date();   // beginning of cycle: OFF to ON
-        
+
         this.cycleEndDate = new Date();     // end of cycle: ON to OFF
 
         this.cycles = new CircularBuffer(1000); // history of completed cycles: {start: <date/time>, run: <sec>})
-        this.cycles.push({ date: (new Date()), runSec: 0 });  // dummy first completed cycle
+        this.cycles.push({ date: timestamp(new Date()), runSec: 0 });  // dummy first completed cycle
 
         //todo: establish checkpoint schedule, save live data t ofile every N sec.
     }
@@ -246,7 +283,7 @@ class DeviceReadings {
                 this.sinceCycles.value += 1;
 
                 this.cycles.push({           // append latest cycle to *end* of log...
-                    date: this.cycleStartDate,
+                    date: timestamp(this.cycleStartDate),
                     runSec: dateToSec(curRunMs),
                 });
             };
@@ -280,31 +317,6 @@ class DeviceReadings {
         this.sinceRunTime.value = 0;
         this.since.value = sampleDate;
     }
-
-    /**
-     * Restore checkpointed data, if possible
-     *
-     * Has the side effect of updating relevant properties of `this`.
-     *
-     * @param {*} filePath
-     * @memberof DeviceReadings
-     */
-    restore(filePath) {
-        const zipHandler = new JSZip();
-
-
-    }
-
-
-    /**
-     * Save current values to disk
-     *
-     * @param {*} filePath
-     * @memberof DeviceReadings
-     */
-    save(filePath) {
-
-    }
 }
 
 
@@ -329,9 +341,8 @@ class DeviceHandler {
 
         this.status = "Starting";
 
-        this.readings = new DeviceReadings(deviceConfig);
         this.historyPath = `${this.skPlugin.dataDir}/${this.id}.dat`;
-        this.readings.restore(this.historyPath);
+        this.readings = DeviceReadings.restore(this.historyPath) || new DeviceReadings(deviceConfig);       // zero history if can't read from disk
 
         // when device handler ready, arm the listener event.
         // unseen here, but on return from this constructor, plugin will arm the heartbeat event.
@@ -350,7 +361,7 @@ class DeviceHandler {
 
     stop() {
         this.skPlugin.debug(`Stopping ${this.deviceConfig.id}`);
-        this.readings.save(this.historyPath);
+        DeviceReadings.save(this.readings, this.historyPath);
         this.status = "Stopped";
     }
 
@@ -382,7 +393,7 @@ class DeviceHandler {
         };
 
         if (dateToSec(nowMs - this.lastSave) > this.deviceConfig.secCheckpoint) {
-            this.readings.save(this.historyPath);
+            DeviceReadings.save(this.readings, this.historyPath);
             this.lastSave = nowMs;
         }
 
@@ -624,4 +635,4 @@ class DeviceHandler {
     }
 }
 
-module.exports = { DeviceStatus, DeviceHandler };
+module.exports = { DeviceStatus, DeviceHandler, DeviceReadings };

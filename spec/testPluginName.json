@@ -1,0 +1,250 @@
+{
+    "config": {
+        "name": "testPluginName",
+        "id": "testPluginName",
+        "skMonitorPath": "monitor.input",
+        "skRunStatsPath": "results.path.1",
+        "secTimeout": 20,
+        "offsetHours": 0,
+        "secReportInterval": 0.1,
+        "noiseMargin": 0.01,
+        "secNominalRunTIme": 30,
+        "secNominalOffTime": 43200,
+        "dayAveragingWindow": 7,
+        "secCheckpoint": 1000
+    },
+    "status": {
+        "key": "status",
+        "value": {
+            "label": "OFFLINE"
+        },
+        "meta": {
+            "displayName": "Current status",
+            "enum": [
+                "OFFLINE",
+                "STOPPED",
+                "RUNNING"
+            ],
+            "description": "Current status of device.  OFFLINE means no status report in 'too' long."
+        }
+    },
+    "timeInState": {
+        "key": "timeInState",
+        "value": 0,
+        "meta": {
+            "displayName": "Time since last state change",
+            "units": "s",
+            "description": "Time since last state change occurred.",
+            "displayScale": [
+                0,
+                691200
+            ],
+            "zones": [
+                {
+                    "upper": 172800,
+                    "state": "normal",
+                    "message": ""
+                },
+                {
+                    "lower": 172800,
+                    "upper": 216000,
+                    "state": "alert",
+                    "message": "Time Between Cycles High"
+                },
+                {
+                    "lower": 216000,
+                    "upper": 345600,
+                    "state": "warn",
+                    "message": "Time Between Cycles Warning High"
+                },
+                {
+                    "lower": 604800,
+                    "state": "alarm",
+                    "message": "Time Between Cycles Alarm High"
+                }
+            ]
+        }
+    },
+    "since": {
+        "key": "since",
+        "value": "2022-03-06T00:49:25.916Z",
+        "meta": {
+            "displayName": "Statistics Start",
+            "units": "timestamp",
+            "description": "Cycles and runtime accumulated since this moment"
+        }
+    },
+    "sinceCycles": {
+        "key": "sinceCycles",
+        "value": 0,
+        "meta": {
+            "displayName": "Run Cycles",
+            "description": "On-off duty cycles since statistics start"
+        }
+    },
+    "sinceRunTime": {
+        "key": "sinceRunTime",
+        "value": 0,
+        "meta": {
+            "displayName": "Run Time",
+            "units": "s",
+            "description": "Cumulative run time since statistics start"
+        }
+    },
+    "lastRunTime": {
+        "key": "lastRunTime",
+        "value": "2022-03-06T00:49:25.916Z",
+        "meta": {
+            "displayName": "Last Run Time",
+            "units": "s",
+            "displayScale": [
+                0,
+                150
+            ],
+            "description": "Runtime of last completed cycle",
+            "zones": [
+                {
+                    "upper": 5,
+                    "state": "alarm",
+                    "message": "Run Time Alarm Low"
+                },
+                {
+                    "lower": 5,
+                    "upper": 10,
+                    "state": "warn",
+                    "message": "Run Time Warning Low"
+                },
+                {
+                    "lower": 10,
+                    "upper": 15,
+                    "state": "alert",
+                    "message": "Run Time Low"
+                },
+                {
+                    "lower": 20,
+                    "upper": 27,
+                    "state": "normal",
+                    "message": ""
+                },
+                {
+                    "lower": 27,
+                    "upper": 32,
+                    "state": "nominal",
+                    "message": ""
+                },
+                {
+                    "lower": 32,
+                    "upper": 35,
+                    "state": "normal",
+                    "message": ""
+                },
+                {
+                    "lower": 35,
+                    "upper": 40,
+                    "state": "alert",
+                    "message": "Run Time High"
+                },
+                {
+                    "lower": 40,
+                    "upper": 45,
+                    "state": "warn",
+                    "message": "Run Time Warning High"
+                },
+                {
+                    "lower": 45,
+                    "state": "alarm",
+                    "message": "Run Time Alarm High"
+                }
+            ]
+        }
+    },
+    "lastOffTime": {
+        "key": "lastOffTime",
+        "value": 0,
+        "meta": {
+            "displayName": "Last Off Time",
+            "units": "s",
+            "displayScale": [
+                0,
+                691200
+            ],
+            "description": "Time pump has been off since last completed cycle",
+            "zones": [
+                {
+                    "upper": 28512,
+                    "state": "alarm",
+                    "message": "Time Between Cycles Alarm Low"
+                },
+                {
+                    "lower": 28512,
+                    "upper": 34560,
+                    "state": "warn",
+                    "message": "Time Between Cycles Warning Low"
+                },
+                {
+                    "lower": 34560,
+                    "upper": 43200,
+                    "state": "alert",
+                    "message": "Time Between Cycles Low"
+                },
+                {
+                    "lower": 43200,
+                    "upper": 86400,
+                    "state": "normal",
+                    "message": ""
+                },
+                {
+                    "lower": 86400,
+                    "upper": 86400,
+                    "state": "nominal",
+                    "message": ""
+                },
+                {
+                    "lower": 86400,
+                    "upper": 172800,
+                    "state": "normal",
+                    "message": ""
+                },
+                {
+                    "lower": 172800,
+                    "upper": 216000,
+                    "state": "alert",
+                    "message": "Time Between Cycles High"
+                },
+                {
+                    "lower": 216000,
+                    "upper": 345600,
+                    "state": "warn",
+                    "message": "Time Between Cycles Warning High"
+                },
+                {
+                    "lower": 604800,
+                    "state": "alarm",
+                    "message": "Time Between Cycles Alarm High"
+                }
+            ]
+        }
+    },
+    "cycleStartDate": "2022-03-06T00:49:25.916Z",
+    "cycleEndDate": "2022-03-06T00:49:25.916Z",
+    "cycles": {
+        "_buffer": [
+            {
+                "date": 1646527765015,
+                "runSec": 0
+            },
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+        ],
+        "_capacity": 10,
+        "_first": 0,
+        "_size": 1
+    }
+}

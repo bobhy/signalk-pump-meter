@@ -54,9 +54,11 @@ class TestPlugin {
                     secNominalRunTIme: 30,
                     secNominalOffTime: 24 * 60 * 60 / 2,
                     dayAveragingWindow: 7,
+                    secCheckpoint: 1000, // sec
                 }
             ]
         };
+
 
         this.deviceConfig = this.options.devices[0];    // plugin.getHandler not initialized yet.
 
@@ -222,6 +224,18 @@ async function newTestPlugin() {
     const tp = new TestPlugin();
     await delay(100);       // give plugin time to initialize deviceHandler
     // do fixups here, if any.....
+    tp.deviceHandler = tp.plugin.getHandler(tp.deviceName);  // pick up singleton device handleer after it's valid to look it up.
+    tp.addCycles = async (numCycles) => {
+        for (var i = 0; i < numCycles; i++) {
+            tp.sendTo(i + 1);
+            var d = await tp.getFrom();
+            tp.sendTo(0);
+            d = await tp.getFrom();
+        }
+    };
+
+
+
     return tp;
 }
 

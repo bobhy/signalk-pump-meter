@@ -1,7 +1,9 @@
 // tests for pump meter history recording and api
 
 const { newTestPlugin, TestPlugin, delay, TIME_PREC, TIME_PREC_MS } = require("../helpers/test-plugin");
+const { DeviceReadings } = require("../../DeviceHandler");
 const CircularBuffer = require('circular-buffer');
+const fs = require('fs');
 
 jasmine.DEFAULT_TIMEOUT_INTERVAL = 100000;
 
@@ -127,11 +129,12 @@ describe("Saving and restoring history to disk", function () {
     beforeEach(async function () {
         // set up a canned history and attach it to a test plugin.  Return various useful parts in `this`
         this.tp = await newTestPlugin();
-        this.mockHistCap = 10;
+        this.curDh =  this.tp.plugin.getHandler(this.tp.deviceName);
 
+        this.mockHistCap = 10;
         this.mockCb = new CircularBuffer(this.mockHistCap);
         this.mockCb.push({ date: Date.now() - 1000, runSec: 0 });       // .deltaValues() presumes there's always at least one cycle in history.
-        this.tp.plugin.getHandler(this.tp.deviceName).readings.cycles = this.mockCb;  // monkey patch known history
+        this.curDh.readings.cycles = this.mockCb;  // monkey patch known history
 
         this.addCycles = async (numCycles) => {
             for (var i = 0; i < numCycles; i++) {
@@ -141,9 +144,26 @@ describe("Saving and restoring history to disk", function () {
                 d = await this.tp.getFrom();
             }
         };
+
+        this.cleanSavedFile = () => {
+
+        }
     });
 
-    xit("loads old history from disk, if found", async function () {
+    fit("saves current context on demand", async function () {
+        
+        const tp = await newTestPlugin();
+        expect(tp.deviceHandler.readings.cycles.size()).toBe(1);
+        await tp.addCycles(10);       // 
+        expect(tp.deviceHandler.readings.cycles.size()).toBe(11);
+        DeviceReadings.save(tp.deviceHandler.readings, tp.deviceHandler.historyPath);
+
+        const oldSave = JSON.parse(fs.readFileSync(tp.deviceHandler.historyPath));      // read and parse history
+        expect(oldSave.cycles._size).toBe(11);
+
+    });
+    it("loads old history from disk, if found", async function () {
+        var t = 1;
 
     });
 
