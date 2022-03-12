@@ -47,6 +47,7 @@ class TestPlugin {
                     id: deviceId,
                     skMonitorPath: this.monPath,
                     skRunStatsPath: this.rsPath,
+                    historyCapacity: 10,
                     secTimeout: 20,
                     offsetHours: 0,
                     secReportInterval: this.reportMs / 1000.0, // .getFrom protocol needs > 1 heartbeat.

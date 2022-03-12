@@ -258,9 +258,9 @@ describe("Behavior of current* statistics", () => {
         rsp = await tp.getFrom();
         expect(rsp.values.status).toBe(DeviceStatus.STOPPED.toString());
         expect(rsp.values.timeInState).toBeLessThan(prev_rsp.values.timeInState);
-        await delay(500);
+        await delay(550);
         rsp = await tp.getFrom(true);
-        expect(rsp.values.timeInState).toBeGreaterThanOrEqual(0.5);
+        expect(rsp.values.timeInState).toBeGreaterThanOrEqual(0.5); // delay can be short by 50ms.
 
 
         tp.plugin.getHandler(tp.deviceName).deviceConfig.secTimeout = 1;        // this business of accessing deviceHandler options is getting wierd!

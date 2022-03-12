@@ -3,12 +3,10 @@ const CircularBuffer = require('circular-buffer');
 const _ = require('lodash');
 const assert = require('assert').strict;
 const Data = require('dataclass').Data;
-const ESSerializer = require('esserializer');
-ESSerializer.interceptRequire();
-
 const fs = require('fs');
 
-const DAY_SEC = 24 * 60 * 60    // number of seconds in a day
+const READINGS_HISTORY_CAPACITY = 1000;     //todo: configurable someday
+const DAY_SEC = 24 * 60 * 60                // number of seconds in a day
 
 // pump run statistics logged and reported periodically
 
@@ -32,6 +30,8 @@ function dateToSec(msValue) {
 function timestamp(moment) {
     return moment.toISOString();
 }
+
+
 /**
  * Enum for possible states of device: STOPPED, RUNNING, OFFLINE (means device hasn't reported any status in "too" long).
  *
@@ -73,19 +73,49 @@ DeviceStatus_all = Object.freeze(DeviceStatus_all); // whew!
 class DeviceReadings {
 
     /**
-     * Restore checkpointed data, if possible
-     *
-     *
-     * @param {*} filePath
-     * @returns {DeviceReadings} 
+     * Save current values to disk
+     * 
+     * After a lot of failure with various serialization packages, settled on hand coding
+     * the serialize/deserialize function.  
+     * 
+     * @param {DeviceReadings} instance the object to serialize
+     * @param {string} filePath where to put it
      * @memberof DeviceReadings
      */
-    static restore(filePath) {
-        var instance = undefined;
+
+    static save(instance, filePath) {
+        const serInstance = JSON.stringify({
+            cycles: instance.cycles.toarray(),
+            since: instance.since.value,
+            sinceRunTime: instance.sinceRunTime.value,
+            sinceCycles: instance.sinceCycles.value,
+        });
+        fs.writeFileSync(filePath, serInstance);
+    }
+
+    /**
+     * Restore checkpointed data, if possible
+     *
+     * @param {*} filePath
+     * @returns {DeviceReadings} A deserialized instance, or undefined if file can't be read or parseed.
+     * @memberof DeviceReadings
+     */
+    static restore(filePath, config) {
+        const instance = new DeviceReadings(config);
 
         try {
-            const serInstance = fs.readFileSync(filePath, 'utf-8')
-            instance = ESSerializer.deserialize(serInstance, [DeviceReadings, DeviceStatus, SkValue, CircularBuffer]);
+            const instanceData = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+
+            instance.since.value = instanceData.since;
+            instance.sinceCycles.value = instanceData.sinceCycles;
+            instance.sinceRunTime.value = instanceData.sinceRunTime;
+
+            const newCb = new CircularBuffer(instance.config.historyCapacity);  // which might be different size than what was saved
+            for (const e of instanceData.cycles) {
+                //todo: if ever change log object, might need to adjust 'e' here
+                newCb.push(e);
+            };
+            instance.cycles = newCb;
         } catch (e) {
             if (e.code != 'ENOENT') {
                 throw (e);
@@ -95,16 +125,6 @@ class DeviceReadings {
         return instance;
     }
 
-    /**
-     * Save current values to disk
-     *
-     * @param {*} filePath
-     * @memberof DeviceReadings
-     */
-    static save(instance, filePath) {
-        const serInstance = ESSerializer.serialize(instance);
-        fs.writeFileSync(filePath, serInstance, 'utf-8');
-    }
 
     /**
      * Creates an instance of DeviceReadings.
@@ -219,105 +239,148 @@ class DeviceReadings {
 
         this.cycleEndDate = new Date();     // end of cycle: ON to OFF
 
-        this.cycles = new CircularBuffer(1000); // history of completed cycles: {start: <date/time>, run: <sec>})
-        this.cycles.push({ date: timestamp(new Date()), runSec: 0 });  // dummy first completed cycle
+        this.cycles = new CircularBuffer(this.config.historyCapacity); // history of completed cycles: {start: <date/time>, run: <sec>})
 
-        //todo: establish checkpoint schedule, save live data t ofile every N sec.
-    }
 
-    /**
-     * Account for a new sample observation
-     * If going from OFF to ON, start a new cycle.
-     * While ON (including first ON after OFF), accumulate 'since' stats
-     * If going from ON to OFF, mark current cycle completed, update 'last' cycle stats for newly-completed cycle,
-     * and log completed cycle.
-     * Optimized so no calculations need to be done for steady state OFF status.
-     * 
-     * Rant about `.push()`:
-     * We use @see CircularBuffer to store history of completed cycles.  When adding the most recently completed cycle to the history,
-     * we use `.push()` rather than `.enq()`. This ensures that `.toarray()[0]` or `.get(0)` is the *oldest* item in history,
-     * which is the desired representation.
-     * I suppose @see CircularBuffer is following the *bad* example of @see Array.prototype in having
-     * `.push()` defined to append to the *end* of the buffer, but the CS101 definition of the operator is that
-     * *enqueue* adds an element to the end of the buffer, so *push* should prepend to the beginning.
-     * The fathers have eaten sour grapes and the children's teeth are set on edge.
-     *
-     *
-     * @param {*} sampleValue       the observed value.  Any truthy value indicates device is ON.
-     * @param {Date} sampleDate     the timestamp of the value (which, if pulled from a log, might not be "now")
-     *                              So far, however, I can't figure out how to get the timestamp from the log, so
-     *                              the played-back data is shifted into the present time.
-     * @param {Number} prevValue    the last observed value
-     * @param {Date} prevValueDate  timestamp when last value was presented
-     * @memberof DeviceReadings
-     */
-    updateFromSample(sampleValue, sampleDate, prevValue, prevValueDate) {       // timestamp of new value (might be read from log)
+        /**
+         * Account for a new sample observation
+         * If going from OFF to ON, start a new cycle.
+         * While ON (including first ON after OFF), accumulate 'since' stats
+         * If going from ON to OFF, mark current cycle completed, update 'last' cycle stats for newly-completed cycle,
+         * and log completed cycle.
+         * Optimized so no calculations need to be done for steady state OFF status.
+         * 
+         * Rant about `.push()`:
+         * We use @see CircularBuffer to store history of completed cycles.  When adding the most recently completed cycle to the history,
+         * we use `.push()` rather than `.enq()`. This ensures that `.toarray()[0]` or `.get(0)` is the *oldest* item in history,
+         * which is the desired representation.
+         * I suppose @see CircularBuffer is following the *bad* example of @see Array.prototype in having
+         * `.push()` defined to append to the *end* of the buffer, but the CS101 definition of the operator is that
+         * *enqueue* adds an element to the end of the buffer, so *push* should prepend to the beginning.
+         * The fathers have eaten sour grapes and the children's teeth are set on edge.
+         *
+         *
+         * @param {*} sampleValue       the observed value.  Any truthy value indicates device is ON.
+         * @param {Date} sampleDate     the timestamp of the value (which, if pulled from a log, might not be "now")
+         *                              So far, however, I can't figure out how to get the timestamp from the log, so
+         *                              the played-back data is shifted into the present time.
+         * @param {Number} prevValue    the last observed value
+         * @param {Date} prevValueDate  timestamp when last value was presented
+         * @memberof DeviceReadings
+         */
+        updateFromSample(sampleValue, sampleDate, prevValue, prevValueDate, noiseMargin) {       // timestamp of new value (might be read from log)
 
-        assert((typeof sampleValue) == 'number');
-        //todo why? assert((sampleDate - prevValueDate > 0), `updateFromSample, sampleDate diff ${sampleDate - prevValueDate} not > 0`);
+            assert((typeof sampleValue) == 'number');
+            //todo why? assert((sampleDate - prevValueDate > 0), `updateFromSample, sampleDate diff ${sampleDate - prevValueDate} not > 0`);
 
-        if (sampleValue && (Math.abs(sampleValue) <= this.config.noiseMargin)) {       // clip noise to zero.
-            sampleValue = 0.0;
-        };
-
-        if (sampleValue) {                  // pump *IS* running
-            if (!prevValue) {        // but it was not previously --> start new cycle
-                this.timeInState.value = sampleDate;
-
-                this.lastOffTime.value = sampleDate - this.cycleEndDate;
-
-                this.cycleStartDate = sampleDate;
-            }
-            // anyway, it's running now: extend this cycle
-            const prevSampleInterval = sampleDate - prevValueDate;
-            this.sinceRunTime.value += prevSampleInterval;
-            this.status.value = DeviceStatus.RUNNING;
-
-        } else {                            // pump *NOT* running
-            if (prevValue) {          // but it was previously --> record end of cycle
-                this.timeInState.value = sampleDate;
-                this.cycleEndDate = sampleDate;
-
-                const curRunMs = sampleDate - this.cycleStartDate;
-                this.lastRunTime.value = sampleDate - this.cycleStartDate
-                this.sinceCycles.value += 1;
-
-                this.cycles.push({           // append latest cycle to *end* of log...
-                    date: timestamp(this.cycleStartDate),
-                    runSec: dateToSec(curRunMs),
-                });
+            if (sampleValue && (Math.abs(sampleValue) <= noiseMargin)) {       // clip noise to zero.
+                sampleValue = 0.0;
             };
-            this.status.value = DeviceStatus.STOPPED;
-        };
-    }
 
-    /**
-     * Mark the device as OFFLINE
-     *
-     * Usually due to no status report for "too" long.
-     *
-     * @param {*} sampleDate
-     * @memberof DeviceReadings
-     */
-    forceOffline(sampleDate) {
-        this.status.value = DeviceStatus.OFFLINE;
-        this.timeInState.value = sampleDate;
-    }
+            if (sampleValue) {                  // pump *IS* running
+                if (!prevValue) {        // but it was not previously --> start new cycle
+                    this.timeInState.value = sampleDate;
+                    this.lastOffTime.value = sampleDate - this.cycleEndDate;
+                    this.cycleStartDate = sampleDate;
+                }
+                // anyway, it's running now: extend this cycle
+                const prevSampleInterval = sampleDate - prevValueDate;
+                this.sinceRunTime.value += prevSampleInterval;
+                this.status.value = DeviceStatus.RUNNING;
 
-    /**
-     * Reset 'since' statistics
-     * 
-     * Eventually, add a POST to trigger this.
-     *
-     * @param {*} sampleDate
-     * @memberof DeviceReadings
-     */
-    resetSince(sampleDate) {
-        this.sinceCycles.value = 0;
-        this.sinceRunTime.value = 0;
-        this.since.value = sampleDate;
+            } else {                            // pump *NOT* running
+                if (prevValue) {          // but it was previously --> record end of cycle
+                    this.timeInState.value = sampleDate;
+                    this.cycleEndDate = sampleDate;
+                    const curRunMs = sampleDate - this.cycleStartDate;
+                    this.lastRunTime.value = curRunMs;
+                    this.sinceCycles.value += 1;
+
+                    this.cycles.push({           // append latest cycle to *end* of log...
+                        date: timestamp(this.cycleStartDate),
+                        runSec: dateToSec(curRunMs),
+                    });
+                };
+                this.status.value = DeviceStatus.STOPPED;
+            };
+        }
+
+        /**
+         * Mark the device as OFFLINE
+         *
+         * Usually due to no status report for "too" long.
+         *
+         * @param {*} sampleDate
+         * @memberof DeviceReadings
+         */
+        forceOffline(sampleDate) {
+            this.status.value = DeviceStatus.OFFLINE;
+            this.timeInState.value = sampleDate;
+        }
+
+        /**
+         * Reset 'since' statistics
+         * 
+         * Eventually, add a POST to trigger this.
+         *
+         * @param {*} sampleDate
+         * @memberof DeviceReadings
+         */
+        resetSince(sampleDate) {
+            this.sinceCycles.value = 0;
+            this.sinceRunTime.value = 0;
+            this.since.value = sampleDate;
+        }
+
+
+        /**
+         * todo: work in progress
+         * 
+         * update meta zones "nominal" and "normal" ranges for lastRunTime and lastOffTime
+         * based on recent history of samples.
+         * Mean of samples becomes new nominal and std deviation becomes normal range. 
+         * Adjust "inner" edges of alert range to meet "outer" edges of new normal range.
+         * The picture is that the normal arc floats back and forth between the inner edges of the warning range,
+         * with the space within warning and normal being the alert range.
+         * Expect a new reading to be outside the (1 sigma) normal range about 32% of time.  
+         * If this results in too many alert events, consider using > 1.0 * sigma.
+         * 
+         * In no case does the warning or alarm range change except by user manual config.
+         * 
+         *
+         * @memberof DeviceReadings
+         */
+        updateZonesNormal() {
+
+            const offSamples = [];
+            const runSamples = [];
+
+            var laterTimestamp = undefined;
+            const nowTime = new Date();
+
+            for (var i = this.cycles.size - 1; i <= 0; --i) {     // loop from most recent to oldest samples.
+                const ent = this.cycles.get(i);
+                const timestamp = new Date(ent.timestamp);
+                const runSec = ent.runSec;
+                if (((nowTime - timestamp) / 1000) < DAY_SEC * this.config.dayAveragingWindow) {
+                    if (laterTimestamp) {
+                        offSamples.push(laterTimestamp - timestamp);
+                    }
+                    runSamples.push(runSec);
+                    laterTimestamp = timestamp;
+                }
+            }
+
+            const updateZones = (samples, skv) => {
+                //const stdDev = mathjs.std(samples);  // need other implementation of std deviation
+
+
+            }
+
+            updateZones(runSamples.this.lastRunTime);
+            updateZones(offSamples, this.lastOffTime);
+        }
     }
-}
 
 
 
@@ -341,8 +404,9 @@ class DeviceHandler {
 
         this.status = "Starting";
 
-        this.historyPath = `${this.skPlugin.dataDir}/${this.id}.dat`;
-        this.readings = DeviceReadings.restore(this.historyPath) || new DeviceReadings(deviceConfig);       // zero history if can't read from disk
+        this.historyPath = `${this.skPlugin.dataDir}/${this.id}.json`;
+
+        this.readings = DeviceReadings.restore(this.historyPath, this.deviceConfig);      // zero history if can't read from disk
 
         // when device handler ready, arm the listener event.
         // unseen here, but on return from this constructor, plugin will arm the heartbeat event.
@@ -420,7 +484,7 @@ class DeviceHandler {
             val = (!!val) ? 1 : 0;      // if val is any kind of truthy, coerce to numeric 1, else 0.
             this.skPlugin.debug(`Sample non-numeric, converting to ${val}`)
         }
-        this.readings.updateFromSample(val, new Date(), this.lastValue, this.lastValueDate);        // update readings and cyclecount history.
+        this.readings.updateFromSample(val, new Date(), this.lastValue, this.lastValueDate, this.deviceConfig.noiseMargin);        // update readings and cyclecount history.
 
         this.lastValue = val;
         this.lastValueDate = new Date();        // remember last sample time for next time.        
@@ -606,6 +670,9 @@ class DeviceHandler {
         };
 
         let res = [];
+
+        startRange = startRange.toISOString();  // dates in history are GMT strings, which, fortunately, compare numerically
+        endRange = endRange.toISOString();
 
         const hist = this.readings.cycles;
 

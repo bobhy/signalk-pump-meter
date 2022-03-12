@@ -29,7 +29,10 @@ class PumpMeterPlugin extends SignalKPlugin {
     this.optInt({ propName: 'secNominalRunTime', title: 'Default normal device run time (secs)', defaultVal: 30, longDescription: 'Expected normal duration of device run.' });
     this.optInt({ propName: 'secNominalOffTime', title: 'Default normal device time between runs (secs)', defaultVal: (24*60*60/2), longDescription: 'Expected normal time between device runs (half a day).' });
 
-    this.optInt({ propName: 'dayAveragingWindow', title: 'Average statistics over this many days.', defaultVal: 7, longDescription: 'Window of time over which statistics are averaged.' });
+    this.optInt({ propName: 'dayAveragingWindow', title: 'Average statistics over this many days.', defaultVal: 7, longDescription: 'Window of time over which statistics are averaged, in days.' });
+    this.optInt({ propName: 'historyCapacity', title: 'Number of entries in saved history.', defaultVal: 1000, longDescription: 'Number of entries in remembered history of cycles' });
+    this.optInt({ propName: 'secCheckpoint', title: 'History checkpoint interval (sec)', defaultVal: 600, longDescription: 'How frequently to write cycle history to disk.' });
+    
 
 
     // end of device properties

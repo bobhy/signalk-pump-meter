@@ -1,11 +1,13 @@
 // tests for pump meter history recording and api
 
 const { newTestPlugin, TestPlugin, delay, TIME_PREC, TIME_PREC_MS } = require("../helpers/test-plugin");
-const { DeviceReadings } = require("../../DeviceHandler");
+const { DeviceReadings, xsave, xrestore } = require("../../DeviceHandler");
 const CircularBuffer = require('circular-buffer');
 const fs = require('fs');
 
 jasmine.DEFAULT_TIMEOUT_INTERVAL = 100000;
+
+//todo: rethink storing cycles.date as a string(date). It's really awkward to test, probably is hard to use, too.
 
 describe("History API", function () {
     beforeEach(async function () {
@@ -20,7 +22,7 @@ describe("History API", function () {
         const endVal = Date.now();
         const startVal = endVal - this.mockHistLen * 3600 * 1000;
         for (var i = 0; i < this.mockHistLen; i++) {
-            this.mockCb.push({ date: startVal + i * 3600 * 1000, runSec: i });    //<date> <num hrs from startVal>
+            this.mockCb.push({ date: (new Date(startVal + i * 3600 * 1000)).toISOString(), runSec: i });    //<date> <num hrs from startVal>
         };
 
         this.expectedRet = this.mockCb.toarray();
@@ -44,29 +46,30 @@ describe("History API", function () {
     it("Defaults start or end if not provided", function () {
 
         retVal = this.tp.getHistory();
-        expect(retVal.length).toEqual(this.expectedRet.length);
-        for (var i = 0; i < this.expectedRet.length; i++) {
-            expect(retVal[i]).toEqual(this.expectedRet[i]);
-        }
+        expect(retVal).toEqual(this.expectedRet)
+        //expect(retVal.length).toEqual(this.expectedRet.length);
+        //for (var i = 0; i < this.expectedRet.length; i++) {
+        //    expect(retVal[i]).toEqual(this.expectedRet[i]);
+        //}
     });
 
     it("Can convert numbers and wellformed strings to dates", function () {
 
         // can convert string date
-        const rv1 = this.tp.getHistory(new Date(this.expectedRet[0].date).toString(),);
+        const rv1 = this.tp.getHistory(this.expectedRet[0].date,);
         //Date.toString truncates milliseconds, so need to pad end range below.
-        const rv2 = this.tp.getHistory(0, new Date(this.expectedRet[this.mockHistLen - 1].date + 1000).toString());
+        const rv2 = this.tp.getHistory(0, this.expectedRet[this.mockHistLen - 1].date);
         expect(rv1).toEqual(rv2);
 
         // non-wellformed strings don't work.
-        const bad_date = this.expectedRet[this.mockHistLen - 1].date.toString().replace("GMT", "XYZ");
+        const bad_date = this.expectedRet[this.mockHistLen - 1].date.toString().replace("Z", "XYZ");
         const rv3 = this.tp.getHistory(0, bad_date);
         expect(rv3.status).toEqual(400);
     });
 
     it("Enforces both start and end limits", function () {
-        const start = this.expectedRet[3].date - 30 * 1000;   // test data is 1 hr apart
-        const end = this.expectedRet[6].date + 20 * 1000;     // use start just before d/t one item and end just after d/t of another.
+        const start = new Date((new Date(this.expectedRet[3].date) - 30 * 1000));   // test data is 1 hr apart
+        const end = new Date((new Date(this.expectedRet[6].date).valueOf() + 20 * 1000));     // use start just before d/t one item and end just after d/t of another.
         const rv4 = this.tp.getHistory(start, end);
         expect(rv4).toEqual(this.expectedRet.slice(3, 7));
     });
@@ -81,8 +84,7 @@ describe("Live history accumulation", function () {
         this.mockHistCap = 10;
 
         this.mockCb = new CircularBuffer(this.mockHistCap);
-        this.mockCb.push({ date: new Date(), runSec: 0 });       // .deltaValues() presumes there's always at least one cycle in history.
-
+        
         this.tp.plugin.getHandler(this.tp.deviceName).readings.cycles = this.mockCb;  // monkey patch known history
 
         this.addCycles = async (numCycles) => {
@@ -150,16 +152,19 @@ describe("Saving and restoring history to disk", function () {
         }
     });
 
-    fit("saves current context on demand", async function () {
+    it("saves current context on demand", async function () {
         
         const tp = await newTestPlugin();
-        expect(tp.deviceHandler.readings.cycles.size()).toBe(1);
-        await tp.addCycles(10);       // 
-        expect(tp.deviceHandler.readings.cycles.size()).toBe(11);
+        expect(tp.deviceHandler.readings.cycles.size()).toBe(0);
+        const ADDED_CYCLES = 8; // must be less than config of 10
+        await tp.addCycles(ADDED_CYCLES);       // 
+        expect(tp.deviceHandler.readings.cycles.size()).toBe(ADDED_CYCLES);
         DeviceReadings.save(tp.deviceHandler.readings, tp.deviceHandler.historyPath);
-
         const oldSave = JSON.parse(fs.readFileSync(tp.deviceHandler.historyPath));      // read and parse history
-        expect(oldSave.cycles._size).toBe(11);
+        expect(oldSave.cycles.length).toBe(ADDED_CYCLES);
+
+        var foo;
+        foo = DeviceReadings.restore(tp.deviceHandler.historyPath, tp.deviceHandler.deviceConfig);
 
     });
     it("loads old history from disk, if found", async function () {
@@ -175,9 +180,6 @@ describe("Saving and restoring history to disk", function () {
 
     });
 
-    xit("detects and handles case when excessively old history is loaded", async function () {
-
-    });
 
 });
 

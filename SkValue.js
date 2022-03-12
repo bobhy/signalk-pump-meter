@@ -50,6 +50,7 @@ class SkValue {
     /**
      * Compute (SK-meta-compatible) zones array for desired range percentages.
      * todo: scale and translate the zone to fix a scale that doesn't go from zero.
+     * todo: actually use this, if it's useful.
      * 
      * we consider 'nominal' a single point, the center of the gauge, and not a range.
      * zones are a symmetric percentage below and above the interior zone.
@@ -95,7 +96,6 @@ class SkValue {
 
         return zones;
     }
-
 }
 
 
