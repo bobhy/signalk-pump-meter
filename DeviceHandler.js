@@ -5,6 +5,7 @@ const assert = require('assert').strict;
 const Data = require('dataclass').Data;
 const fs = require('fs');
 
+
 const READINGS_HISTORY_CAPACITY = 1000;     //todo: configurable someday
 const DAY_SEC = 24 * 60 * 60                // number of seconds in a day
 
@@ -240,147 +241,152 @@ class DeviceReadings {
         this.cycleEndDate = new Date();     // end of cycle: ON to OFF
 
         this.cycles = new CircularBuffer(this.config.historyCapacity); // history of completed cycles: {start: <date/time>, run: <sec>})
-
-
-        /**
-         * Account for a new sample observation
-         * If going from OFF to ON, start a new cycle.
-         * While ON (including first ON after OFF), accumulate 'since' stats
-         * If going from ON to OFF, mark current cycle completed, update 'last' cycle stats for newly-completed cycle,
-         * and log completed cycle.
-         * Optimized so no calculations need to be done for steady state OFF status.
-         * 
-         * Rant about `.push()`:
-         * We use @see CircularBuffer to store history of completed cycles.  When adding the most recently completed cycle to the history,
-         * we use `.push()` rather than `.enq()`. This ensures that `.toarray()[0]` or `.get(0)` is the *oldest* item in history,
-         * which is the desired representation.
-         * I suppose @see CircularBuffer is following the *bad* example of @see Array.prototype in having
-         * `.push()` defined to append to the *end* of the buffer, but the CS101 definition of the operator is that
-         * *enqueue* adds an element to the end of the buffer, so *push* should prepend to the beginning.
-         * The fathers have eaten sour grapes and the children's teeth are set on edge.
-         *
-         *
-         * @param {*} sampleValue       the observed value.  Any truthy value indicates device is ON.
-         * @param {Date} sampleDate     the timestamp of the value (which, if pulled from a log, might not be "now")
-         *                              So far, however, I can't figure out how to get the timestamp from the log, so
-         *                              the played-back data is shifted into the present time.
-         * @param {Number} prevValue    the last observed value
-         * @param {Date} prevValueDate  timestamp when last value was presented
-         * @memberof DeviceReadings
-         */
-        updateFromSample(sampleValue, sampleDate, prevValue, prevValueDate, noiseMargin) {       // timestamp of new value (might be read from log)
-
-            assert((typeof sampleValue) == 'number');
-            //todo why? assert((sampleDate - prevValueDate > 0), `updateFromSample, sampleDate diff ${sampleDate - prevValueDate} not > 0`);
-
-            if (sampleValue && (Math.abs(sampleValue) <= noiseMargin)) {       // clip noise to zero.
-                sampleValue = 0.0;
-            };
-
-            if (sampleValue) {                  // pump *IS* running
-                if (!prevValue) {        // but it was not previously --> start new cycle
-                    this.timeInState.value = sampleDate;
-                    this.lastOffTime.value = sampleDate - this.cycleEndDate;
-                    this.cycleStartDate = sampleDate;
-                }
-                // anyway, it's running now: extend this cycle
-                const prevSampleInterval = sampleDate - prevValueDate;
-                this.sinceRunTime.value += prevSampleInterval;
-                this.status.value = DeviceStatus.RUNNING;
-
-            } else {                            // pump *NOT* running
-                if (prevValue) {          // but it was previously --> record end of cycle
-                    this.timeInState.value = sampleDate;
-                    this.cycleEndDate = sampleDate;
-                    const curRunMs = sampleDate - this.cycleStartDate;
-                    this.lastRunTime.value = curRunMs;
-                    this.sinceCycles.value += 1;
-
-                    this.cycles.push({           // append latest cycle to *end* of log...
-                        date: timestamp(this.cycleStartDate),
-                        runSec: dateToSec(curRunMs),
-                    });
-                };
-                this.status.value = DeviceStatus.STOPPED;
-            };
-        }
-
-        /**
-         * Mark the device as OFFLINE
-         *
-         * Usually due to no status report for "too" long.
-         *
-         * @param {*} sampleDate
-         * @memberof DeviceReadings
-         */
-        forceOffline(sampleDate) {
-            this.status.value = DeviceStatus.OFFLINE;
-            this.timeInState.value = sampleDate;
-        }
-
-        /**
-         * Reset 'since' statistics
-         * 
-         * Eventually, add a POST to trigger this.
-         *
-         * @param {*} sampleDate
-         * @memberof DeviceReadings
-         */
-        resetSince(sampleDate) {
-            this.sinceCycles.value = 0;
-            this.sinceRunTime.value = 0;
-            this.since.value = sampleDate;
-        }
-
-
-        /**
-         * todo: work in progress
-         * 
-         * update meta zones "nominal" and "normal" ranges for lastRunTime and lastOffTime
-         * based on recent history of samples.
-         * Mean of samples becomes new nominal and std deviation becomes normal range. 
-         * Adjust "inner" edges of alert range to meet "outer" edges of new normal range.
-         * The picture is that the normal arc floats back and forth between the inner edges of the warning range,
-         * with the space within warning and normal being the alert range.
-         * Expect a new reading to be outside the (1 sigma) normal range about 32% of time.  
-         * If this results in too many alert events, consider using > 1.0 * sigma.
-         * 
-         * In no case does the warning or alarm range change except by user manual config.
-         * 
-         *
-         * @memberof DeviceReadings
-         */
-        updateZonesNormal() {
-
-            const offSamples = [];
-            const runSamples = [];
-
-            var laterTimestamp = undefined;
-            const nowTime = new Date();
-
-            for (var i = this.cycles.size - 1; i <= 0; --i) {     // loop from most recent to oldest samples.
-                const ent = this.cycles.get(i);
-                const timestamp = new Date(ent.timestamp);
-                const runSec = ent.runSec;
-                if (((nowTime - timestamp) / 1000) < DAY_SEC * this.config.dayAveragingWindow) {
-                    if (laterTimestamp) {
-                        offSamples.push(laterTimestamp - timestamp);
-                    }
-                    runSamples.push(runSec);
-                    laterTimestamp = timestamp;
-                }
-            }
-
-            const updateZones = (samples, skv) => {
-                //const stdDev = mathjs.std(samples);  // need other implementation of std deviation
-
-
-            }
-
-            updateZones(runSamples.this.lastRunTime);
-            updateZones(offSamples, this.lastOffTime);
-        }
     }
+
+
+    /**
+     * Account for a new sample observation
+     * If going from OFF to ON, start a new cycle.
+     * While ON (including first ON after OFF), accumulate 'since' stats
+     * If going from ON to OFF, mark current cycle completed, update 'last' cycle stats for newly-completed cycle,
+     * and log completed cycle.
+     * Optimized so no calculations need to be done for steady state OFF status.
+     * 
+     * Rant about `.push()`:
+     * We use @see CircularBuffer to store history of completed cycles.  When adding the most recently completed cycle to the history,
+     * we use `.push()` rather than `.enq()`. This ensures that `.toarray()[0]` or `.get(0)` is the *oldest* item in history,
+     * which is the desired representation.
+     * I suppose @see CircularBuffer is following the *bad* example of @see Array.prototype in having
+     * `.push()` defined to append to the *end* of the buffer, but the CS101 definition of the operator is that
+     * *enqueue* adds an element to the end of the buffer, so *push* should prepend to the beginning.
+     * The fathers have eaten sour grapes and the children's teeth are set on edge.
+     *
+     *
+     * @param {*} sampleValue       the observed value.  Any truthy value indicates device is ON.
+     * @param {Date} sampleDate     the timestamp of the value (which, if pulled from a log, might not be "now")
+     *                              So far, however, I can't figure out how to get the timestamp from the log, so
+     *                              the played-back data is shifted into the present time.
+     * @param {Number} prevValue    the last observed value
+     * @param {Date} prevValueDate  timestamp when last value was presented
+     * @memberof DeviceReadings
+     */
+    updateFromSample(sampleValue, sampleDate, prevValue, prevValueDate, noiseMargin) {       // timestamp of new value (might be read from log)
+
+        assert((typeof sampleValue) == 'number');
+        //todo why? assert((sampleDate - prevValueDate > 0), `updateFromSample, sampleDate diff ${sampleDate - prevValueDate} not > 0`);
+
+        if (sampleValue && (Math.abs(sampleValue) <= noiseMargin)) {       // clip noise to zero.
+            sampleValue = 0.0;
+        };
+
+        if (sampleValue) {                  // pump *IS* running
+            if (!prevValue) {        // but it was not previously --> start new cycle
+                this.timeInState.value = sampleDate;
+                this.lastOffTime.value = sampleDate - this.cycleEndDate;
+                this.cycleStartDate = sampleDate;
+            }
+            // anyway, it's running now: extend this cycle
+            const prevSampleInterval = sampleDate - prevValueDate;
+            this.sinceRunTime.value += prevSampleInterval;
+            this.status.value = DeviceStatus.RUNNING;
+
+        } else {                            // pump *NOT* running
+            if (prevValue) {          // but it was previously --> record end of cycle
+                this.timeInState.value = sampleDate;
+                this.cycleEndDate = sampleDate;
+                const curRunMs = sampleDate - this.cycleStartDate;
+                this.lastRunTime.value = curRunMs;
+                this.sinceCycles.value += 1;
+
+                this.cycles.push({           // append latest cycle to *end* of log...
+                    date: timestamp(this.cycleStartDate),
+                    runSec: dateToSec(curRunMs),
+                });
+            };
+            this.status.value = DeviceStatus.STOPPED;
+        };
+    }
+
+    /**
+     * Mark the device as OFFLINE
+     *
+     * Usually due to no status report for "too" long.
+     *
+     * @param {*} sampleDate
+     * @memberof DeviceReadings
+     */
+    forceOffline(sampleDate) {
+        this.status.value = DeviceStatus.OFFLINE;
+        this.timeInState.value = sampleDate;
+    }
+
+    /**
+     * Reset 'since' statistics
+     * 
+     * Eventually, add a POST to trigger this.
+     *
+     * @param {*} sampleDate
+     * @memberof DeviceReadings
+     */
+    resetSince(sampleDate) {
+        this.sinceCycles.value = 0;
+        this.sinceRunTime.value = 0;
+        this.since.value = sampleDate;
+    }
+
+
+    /**
+     * todo: work in progress
+     * 
+     * update meta zones "nominal" and "normal" ranges for lastRunTime and lastOffTime
+     * based on recent history of samples.
+     * Mean of samples becomes new nominal and std deviation becomes normal range. 
+     * Adjust "inner" edges of alert range to meet "outer" edges of new normal range.
+     * The picture is that the normal arc floats back and forth between the inner edges of the warning range,
+     * with the space within warning and normal being the alert range.
+     * Expect a new reading to be outside the (1 sigma) normal range about 32% of time.  
+     * If this results in too many alert events, consider using > 1.0 * sigma.
+     * 
+     * In no case does the warning or alarm range change except by user manual config.
+     *
+     * @returns (bool) True iff some zone information was updated. 
+     *
+     * @memberof DeviceReadings
+     */
+    updateZonesNormal() {
+
+        const offSamples = [];
+        const runSamples = [];
+
+        var laterTimestamp = undefined;
+        const nowTime = new Date();
+
+        for (var i = this.cycles.size - 1; i <= 0; --i) {     // loop from most recent to oldest samples.
+            const ent = this.cycles.get(i);
+            const timestamp = new Date(ent.timestamp);
+            const runSec = ent.runSec;
+            if (((nowTime - timestamp) / 1000) < DAY_SEC * this.config.dayAveragingWindow) {
+                if (laterTimestamp) {
+                    offSamples.push(laterTimestamp - timestamp);
+                }
+                runSamples.push(runSec);
+                laterTimestamp = timestamp;
+            }
+        }
+
+        const updateZones = (samples, skv) => {
+            //const stdDev = mathjs.std(samples);  // need other implementation of std deviation    
+
+            return false;       // so far, never makes any change
+
+        }
+
+        const zoneChange = updateZones(runSamples, this.lastRunTime)
+                            | updateZones(offSamples, this.lastOffTime);
+
+        return zoneChange;
+    }
+}
 
 
 
@@ -419,6 +425,8 @@ class DeviceHandler {
         this.lastValueDate = new Date();
         this.lastSKReportDate = new Date();
         this.lastHeartbeatMs = new Date();
+
+        this.metasToSend = 2;       //hack send full meta on first 2 reporting periods.
         this.status = "Started";
     }
 
@@ -451,8 +459,14 @@ class DeviceHandler {
 
         if (dateToSec(nowMs - this.lastSKReportDate) >= this.deviceConfig.secReportInterval) {
             this.sendAllValues();
-            this.sendAllMeta();     //not here!
-            this.updateAveragesAndSend();
+
+            if (--this.metasToSend) {
+                this.sendAllMeta();
+            }
+
+            if (this.readings.updateZonesNormal()) {    //todo find more specific way -- do both change if one does?
+                this.sendAllMeta();         //todo only send updated meta
+            }
             this.lastSKReportDate = nowMs;
         };
 
@@ -488,56 +502,6 @@ class DeviceHandler {
 
         this.lastValue = val;
         this.lastValueDate = new Date();        // remember last sample time for next time.        
-    }
-    /**
-     * Update meta zones for lastRunTime and lastOffTime based on changes in the recent average
-     * First guess: adjust only the 'nominal' zone upper and lower: make it +/- 1 standard deviation
-     * with midpoint of the zone at the mean.
-     * But for now, a simple hack: double and halve the range, just to make something flash on the screen.
-     * @memberof DeviceHandler
-     */
-    updateAveragesAndSend() {
-        function magnify(factor, skv) { // returns [skv, newZones]
-            var zones = skv.meta.zones;
-
-            for (const z of zones) {
-                if (z.state == 'nominal') {
-                    if (z.lower) z.lower *= factor; // bound might be undefined!  
-                    if (z.upper) z.upper *= factor;
-                }
-            }
-            return [skv, zones];
-
-        }
-
-        switch (this._averageCounter % 4) {
-            case 0: // double the range
-                this.updateMeta(
-                    [magnify(2, this.readings.lastRunTime),
-                    magnify(2, this.readings.lastOffTime)]
-                );
-                break;
-            case 1: // halve the range
-                this.updateMeta(
-                    [magnify(0.5, this.readings.lastRunTime),
-                    magnify(0.5, this.readings.lastOffTime)]
-                );
-                break;
-            case 2: // halve the range
-                this.updateMeta(
-                    [magnify(0.5, this.readings.lastRunTime),
-                    magnify(0.5, this.readings.lastOffTime)]
-                );
-                break;
-            case 3: // double the range
-                this.updateMeta(
-                    [magnify(2, this.readings.lastRunTime),
-                    magnify(2, this.readings.lastOffTime)]
-                );
-                break;
-        };
-
-        this._averageCounter += 1;
     }
 
     /**
@@ -618,33 +582,7 @@ class DeviceHandler {
 
         this.sendSKUpdate('meta', values);
     }
-    /**
-     * Update specified metadata properties of one or more readings, 
-     * then send an SK update of the changed properties.
-     *
-     * @param {[SkValue, newMeta], . . .] } skObjMeta   A list of 2-element lists:
-     * [skVal, newMeta], where:
-     * * skVal - The reading statistic to update
-     * * newMeta   An object containing the new metadata, in form {<metaKey>: <metaValue>}.
-     * Note that you must provide a *complete* new value for compound meta like `displayScale`
-     * and `zones`, it's not enough to change just one element of that value.
-     * @memberof DeviceHandler
-     */
-    updateMeta(skObjMeta) {
-
-        var values = [];
-
-        for (const [skValue, newMeta] of skObjMeta) {
-            assert(skValue instanceof SkValue);
-            Object.assign(skValue.meta, newMeta);
-            values.push({
-                key: skValue.key,
-                value: newMeta
-            });
-        }
-
-        this.sendSKUpdate('meta', values);
-    }
+    
 
 
     /**
