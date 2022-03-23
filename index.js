@@ -1,13 +1,15 @@
 const Bacon = require('baconjs');
 const SignalKPlugin = require('signalk-plugin-base');
-const {DeviceHandler} = require('./DeviceHandler.js');
+const { DeviceHandler } = require('./DeviceHandler.js');
 
 
 class PumpMeterPlugin extends SignalKPlugin {
 
   constructor(app) {
-    super({ app, id: 'signalk-pump-meter', name: 'Pump Meter', description: 
-    'Synthesizes runtime and cycle count from another SignalK value that indicates the device is running.  Device can be any intermittent motor, not just a pump.' });
+    super({
+      app, id: 'signalk-pump-meter', name: 'Pump Meter', description:
+        'Synthesizes runtime and cycle count from another SignalK value that indicates the device is running.  Device can be any intermittent motor, not just a pump.'
+    });
 
     this.optObj({ propName: 'devices', title: 'Devices to monitor', isArray: true, itemTitle: 'Device' });
     // the following properties apply to each device
@@ -24,15 +26,15 @@ class PumpMeterPlugin extends SignalKPlugin {
     });
     this.optInt({ propName: 'secReportInterval', title: 'Run data reporting interval (secs)', defaultVal: 30, longDescription: 'Number of seconds between each report of device run data' });
     this.optInt({ propName: 'secTimeout', title: 'Device signal timeout (secs)', defaultVal: 300, longDescription: 'Declare the device off if no signal received for this interval.' });
-    this.optNum({ propName: 'noiseMargin', title: 'Noise margin', defaultVal: 0.010, longDescription: 'Range around zero to be considered zero for SkMonitorPath.' });
-
+    
     this.optInt({ propName: 'secNominalRunTime', title: 'Default normal device run time (secs)', defaultVal: 30, longDescription: 'Expected normal duration of device run.' });
-    this.optInt({ propName: 'secNominalOffTime', title: 'Default normal device time between runs (secs)', defaultVal: (24*60*60/2), longDescription: 'Expected normal time between device runs (half a day).' });
+    this.optInt({ propName: 'secNominalOffTime', title: 'Default normal device time between runs (secs)', defaultVal: (24 * 60 * 60 / 2), longDescription: 'Expected normal time between device runs (half a day).' });
 
     this.optInt({ propName: 'dayAveragingWindow', title: 'Average statistics over this many days.', defaultVal: 7, longDescription: 'Window of time over which statistics are averaged, in days.' });
     this.optInt({ propName: 'historyCapacity', title: 'Number of entries in saved history.', defaultVal: 1000, longDescription: 'Number of entries in remembered history of cycles' });
     this.optInt({ propName: 'secCheckpoint', title: 'History checkpoint interval (sec)', defaultVal: 600, longDescription: 'How frequently to write cycle history to disk.' });
-    
+    this.optNum({ propName: 'noiseMargin', title: 'Noise margin', defaultVal: 0.010, longDescription: 'Range around zero to be considered zero for SkMonitorPath.' });
+
 
 
     // end of device properties
